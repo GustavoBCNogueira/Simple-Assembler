@@ -41,7 +41,7 @@ void primeira_passagem(ifstream& file) {
         
         // ignorando os comentários
         for (int i = 0; i < tokens.size(); i++) {
-            auto it = tokens[i].find("//");
+            auto it = tokens[i].find(";");
             if (it != tokens[i].npos) {
                 tokens.erase(tokens.begin()+i, tokens.end());
                 break;
