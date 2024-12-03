@@ -38,7 +38,15 @@ void primeira_passagem(ifstream& file) {
             linha.erase(0, pos+delimiter.length());
         }
         tokens.push_back(linha);
-        // ignorar os comentários
+        
+        // ignorando os comentários
+        for (int i = 0; i < tokens.size(); i++) {
+            auto it = tokens[i].find("//");
+            if (it != tokens[i].npos) {
+                tokens.erase(tokens.begin()+i, tokens.end());
+                break;
+            }
+        }
 
         if (tokens[0].find(':') != tokens[0].npos) {
             // caso que existe rótulo na linha
