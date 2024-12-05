@@ -2,11 +2,24 @@
 
 using namespace std;
 
-void readFile(ifstream& file) {
-    string line;
-    while (getline(file, line)) {
-        cout << line << '\n';
-    }
+// trim from start (in place)
+inline void ltrim(string &s) {
+    s.erase(s.begin(), find_if(s.begin(), s.end(), [](unsigned char ch) {
+        return !isspace(ch);
+    }));
+}
+
+// trim from end (in place)
+inline void rtrim(string &s) {
+    s.erase(find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+        return !isspace(ch);
+    }).base(), s.end());
+}
+
+// trim from both ends (in place)
+inline void trim(string &s) {
+    rtrim(s);
+    ltrim(s);
 }
 
 void build_tabela_instrucoes(map<string, pair<string, int>>& tabela_instrucoes) {
@@ -18,6 +31,38 @@ void build_tabela_instrucoes(map<string, pair<string, int>>& tabela_instrucoes) 
                          {"load", {"10", 2}}, {"store", {"11", 2}}, {"input", {"12", 2}}, 
                          {"output", {"13", 2}}, {"stop", {"14", 1}}};
     return;
+}
+
+void pre_processamento(ifstream& file) {
+    string linha;
+    bool macro = false;
+    vector<string> macro_body;
+    // vamos definir a mnt assim????
+    map<string, int> macro_name_table;
+    vector<vector<string>> macro_definition_table;
+    while (getline(file, linha)) {
+        trim(linha);
+        if (macro) {
+            macro_body.push_back(linha);
+            continue;
+        }
+
+        if (linha.find("ENDMACRO") != linha.npos) {
+            macro_definition_table.push_back(macro_body);
+            macro_body.clear();
+            macro = false;
+        }
+
+        if (linha.find("MACRO") != linha.npos) {
+            string macro_name = linha.substr(0, linha.find(':'));
+            if (macro_name_table.count(macro_name) == 1) {
+                cout << "Erro! Macro redefinida!\n";
+            } else {
+                macro_name_table.insert({macro_name, macro_definition_table.size()});
+                macro = true;
+            }
+        }
+    }
 }
 
 map<string, int> primeira_passagem(ifstream& file) {
@@ -64,6 +109,11 @@ map<string, int> primeira_passagem(ifstream& file) {
         string operacao = tokens[0];
         
         if (tabela_instrucoes.count(operacao) == 1) {
+            // verificando apenas se a quantidade de operandos está correta, 
+            // falta verificar a corretude (2a passagem)
+            if (tokens.size()-1 != tabela_instrucoes[tokens[0]].second) { 
+                cout << "Erro! Operandos inválidos!\n";
+            }
             contador_posicao += tabela_instrucoes[operacao].second;
         } else {
             if (tabela_diretivas.count(operacao) == 1) {
@@ -119,18 +169,12 @@ void segunda_passagem(ifstream& file, map<string, int>& tabela_simbolos) {
         }
 
         if (tabela_instrucoes.count(tokens[0]) == 1) {
-            // verificando apenas se a quantidade de operandos está correta, 
-            // depois passar isso pra 1a passagem e verificar a corretude deles
-            if (tokens.size()-1 == tabela_instrucoes[tokens[0]].second) { 
-                // adiciona o endereço no código máquina ????
-                linha_codigo_maquina += to_string(contador_posicao);
+            // adiciona o endereço no código máquina ????
+            linha_codigo_maquina += to_string(contador_posicao);
 
-                linha_codigo_maquina += tabela_instrucoes[tokens[0]].first;
-                for (int i = 1; i < tokens.size(); i++) {
-                    linha_codigo_maquina += to_string(tabela_simbolos[tokens[i]]);
-                }
-            } else {
-                cout << "Erro! Operandos inválidos!\n";
+            linha_codigo_maquina += tabela_instrucoes[tokens[0]].first;
+            for (int i = 1; i < tokens.size(); i++) {
+                linha_codigo_maquina += to_string(tabela_simbolos[tokens[i]]);
             }
             contador_posicao += tabela_instrucoes[tokens[0]].second;
         } else {
@@ -158,13 +202,6 @@ int main() {
         cout << "Erro! " << fileName << "não tem nada!\n";
     else {
         ifstream inputStream(fileName);
-
-        if (!inputStream) 
-            cout << "Erro! " << fileName << "é um arquivo inválido!\n";
-        else {
-            readFile(inputStream);
-        }
-
     }
 
 
