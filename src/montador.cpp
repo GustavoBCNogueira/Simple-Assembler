@@ -2,6 +2,9 @@
 
 using namespace std;
 
+// variável global para indicar se o programa tem que ser ligado ou não
+bool linker = false;
+
 // trim from start (in place)
 inline void ltrim(string &s) {
     s.erase(s.begin(), find_if(s.begin(), s.end(), [](unsigned char ch) {
@@ -78,6 +81,11 @@ map<string, int> first_pass(ifstream& file) {
         vector<string> tokens;
         size_t pos = 0;
         string token;
+
+        if (line.find("BEGIN") != line.npos || line.find("END") != line.npos) {
+            linker = true;
+            continue;
+        }
 
         while ((pos = line.find(delimiter)) != line.npos) {
             token = line.substr(0, pos);
