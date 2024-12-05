@@ -22,10 +22,10 @@ inline void trim(string &s) {
     ltrim(s);
 }
 
-void build_tabela_instrucoes(map<string, pair<string, int>>& tabela_instrucoes) {
+void build_instruction_table(map<string, pair<string, int>>& instruction_table) {
     // primeiro elemento do pair: opcode
     // segundo elemento do pair: número de operandos
-    tabela_instrucoes = {{"add", {"01", 2}}, {"sub", {"02", 2}}, {"mul", {"03", 2}},
+    instruction_table = {{"add", {"01", 2}}, {"sub", {"02", 2}}, {"mul", {"03", 2}},
                          {"div", {"04", 2}}, {"jmp", {"05", 2}}, {"jmpn", {"06", 2}}, 
                          {"jmpp", {"07", 2}}, {"jmpz", {"08", 2}}, {"copy", {"09", 3}}, 
                          {"load", {"10", 2}}, {"store", {"11", 2}}, {"input", {"12", 2}}, 
@@ -33,28 +33,28 @@ void build_tabela_instrucoes(map<string, pair<string, int>>& tabela_instrucoes) 
     return;
 }
 
-void pre_processamento(ifstream& file) {
-    string linha;
+void pre_processing(ifstream& file) {
+    string line;
     bool macro = false;
     vector<string> macro_body;
     // vamos definir a mnt assim????
     map<string, int> macro_name_table;
     vector<vector<string>> macro_definition_table;
-    while (getline(file, linha)) {
-        trim(linha);
+    while (getline(file, line)) {
+        trim(line);
         if (macro) {
-            macro_body.push_back(linha);
+            macro_body.push_back(line);
             continue;
         }
 
-        if (linha.find("ENDMACRO") != linha.npos) {
+        if (line.find("ENDMACRO") != line.npos) {
             macro_definition_table.push_back(macro_body);
             macro_body.clear();
             macro = false;
         }
 
-        if (linha.find("MACRO") != linha.npos) {
-            string macro_name = linha.substr(0, linha.find(':'));
+        if (line.find("MACRO") != line.npos) {
+            string macro_name = line.substr(0, line.find(':'));
             if (macro_name_table.count(macro_name) == 1) {
                 cout << "Erro! Macro redefinida!\n";
             } else {
@@ -65,26 +65,26 @@ void pre_processamento(ifstream& file) {
     }
 }
 
-map<string, int> primeira_passagem(ifstream& file) {
-    int contador_posicao = 0, contador_linha = 1;
-    string linha, delimiter = " ";
-    map<string, int> tabela_simbolos;
-    map<string, pair<string, int>> tabela_instrucoes;
-    map<string, int> tabela_diretivas = {{"CONST", 1}, {"SPACE", 1}};
+map<string, int> first_pass(ifstream& file) {
+    int position_counter = 0, line_counter = 1;
+    string line, delimiter = " ";
+    map<string, int> symbol_table;
+    map<string, pair<string, int>> instruction_table;
+    map<string, int> directives_table = {{"CONST", 1}, {"SPACE", 1}};
 
-    build_tabela_instrucoes(tabela_instrucoes);
+    build_instruction_table(instruction_table);
 
-    while (getline(file, linha)) {
+    while (getline(file, line)) {
         vector<string> tokens;
         size_t pos = 0;
         string token;
 
-        while ((pos = linha.find(delimiter)) != linha.npos) {
-            token = linha.substr(0, pos);
+        while ((pos = line.find(delimiter)) != line.npos) {
+            token = line.substr(0, pos);
             tokens.push_back(token);
-            linha.erase(0, pos+delimiter.length());
+            line.erase(0, pos+delimiter.length());
         }
-        tokens.push_back(linha);
+        tokens.push_back(line);
         
         // ignorando os comentários
         for (int i = 0; i < tokens.size(); i++) {
@@ -96,57 +96,57 @@ map<string, int> primeira_passagem(ifstream& file) {
         }
 
         if (tokens[0].find(':') != tokens[0].npos) {
-            // caso que existe rótulo na linha
+            // caso que existe rótulo na line
             tokens[0].erase(tokens[0].end());
-            if (tabela_simbolos.count(tokens[0]) == 1) {
+            if (symbol_table.count(tokens[0]) == 1) {
                 cout << "Erro! Símbolo redefinido!\n";
             } else {
-                tabela_simbolos.insert({tokens[0], contador_posicao});
+                symbol_table.insert({tokens[0], position_counter});
             }
             tokens.erase(tokens.begin());
         }
 
-        string operacao = tokens[0];
+        string operation = tokens[0];
         
-        if (tabela_instrucoes.count(operacao) == 1) {
+        if (instruction_table.count(operation) == 1) {
             // verificando apenas se a quantidade de operandos está correta, 
             // falta verificar a corretude (2a passagem)
-            if (tokens.size()-1 != tabela_instrucoes[tokens[0]].second) { 
+            if (tokens.size()-1 != instruction_table[tokens[0]].second) { 
                 cout << "Erro! Operandos inválidos!\n";
             }
-            contador_posicao += tabela_instrucoes[operacao].second;
+            position_counter += instruction_table[operation].second;
         } else {
-            if (tabela_diretivas.count(operacao) == 1) {
+            if (directives_table.count(operation) == 1) {
                 // chama subrotina que executa a tarefa TODO
-                contador_posicao += tabela_diretivas[operacao];
+                position_counter += directives_table[operation];
             } else {
                 cout << "Erro! Operação não identificada!\n";
             }
         }
 
-        contador_linha++;
+        line_counter++;
     }
 
-    return tabela_simbolos;     // retornando a tabela de símbolos para a segunda passagem
+    return symbol_table;     // retornando a tabela de símbolos para a segunda passagem
 }
 
 
-void segunda_passagem(ifstream& file, map<string, int>& tabela_simbolos) {
-    int contador_posicao = 0, contador_linha = 1;
-    string linha, delimiter = " ";
-    map<string, pair<string, int>> tabela_instrucoes;
-    map<string, int> tabela_diretivas = {{"CONST", 1}, {"SPACE", 1}};
-    vector<string> codigo_maquina;
+void segunda_passagem(ifstream& file, map<string, int>& symbol_table) {
+    int position_counter = 0, line_counter = 1;
+    string line, delimiter = " ";
+    map<string, pair<string, int>> instruction_table;
+    map<string, int> directives_table = {{"CONST", 1}, {"SPACE", 1}};
+    vector<string> machine_code;
 
-    build_tabela_instrucoes(tabela_instrucoes);
+    build_instruction_table(instruction_table);
 
-    while (getline(file, linha)) {
+    while (getline(file, line)) {
         vector<string> tokens;
         size_t pos = 0;
-        string token, linha_codigo_maquina = "";
+        string token, line_machine_code = "";
 
-        while ((pos = linha.find(delimiter)) != linha.npos) {
-            token = linha.substr(0, pos);
+        while ((pos = line.find(delimiter)) != line.npos) {
+            token = line.substr(0, pos);
 
             if (token.find(';') != token.npos) {
                 break;
@@ -156,41 +156,41 @@ void segunda_passagem(ifstream& file, map<string, int>& tabela_simbolos) {
                 tokens.push_back(token);
             }
 
-            linha.erase(0, pos+delimiter.length());
+            line.erase(0, pos+delimiter.length());
         }
-        tokens.push_back(linha); // temos que ver isso caso tiver comentarios
+        tokens.push_back(line); // temos que ver isso caso tiver comentarios
 
 
         // considerando que todos os operandos são símbolos
         for (int i = 1; i < tokens.size(); i++) {
-            if (tabela_simbolos.count(tokens[i]) == 0) {
+            if (symbol_table.count(tokens[i]) == 0) {
                 cout << "Erro! Símbolo redefinido!\n";
             }
         }
 
-        if (tabela_instrucoes.count(tokens[0]) == 1) {
+        if (instruction_table.count(tokens[0]) == 1) {
             // adiciona o endereço no código máquina ????
-            linha_codigo_maquina += to_string(contador_posicao);
+            line_machine_code += to_string(position_counter);
 
-            linha_codigo_maquina += tabela_instrucoes[tokens[0]].first;
+            line_machine_code += instruction_table[tokens[0]].first;
             for (int i = 1; i < tokens.size(); i++) {
-                linha_codigo_maquina += to_string(tabela_simbolos[tokens[i]]);
+                line_machine_code += to_string(symbol_table[tokens[i]]);
             }
-            contador_posicao += tabela_instrucoes[tokens[0]].second;
+            position_counter += instruction_table[tokens[0]].second;
         } else {
-            if (tabela_diretivas.count(tokens[0]) == 1) {
+            if (directives_table.count(tokens[0]) == 1) {
                 // adiciona o endereço no código máquina ????
-                linha_codigo_maquina += to_string(contador_posicao);
-                linha_codigo_maquina += "XX"; // se for CONST, coloca o valor da constante
+                line_machine_code += to_string(position_counter);
+                line_machine_code += "XX"; // se for CONST, coloca o valor da constante
                 // chama a subrotina que executa a diretiva TODO
-                contador_posicao += tabela_diretivas[tokens[0]];
+                position_counter += directives_table[tokens[0]];
             } else {
                 cout << "Erro! Operação não indentificada!\n";
             }
         }
 
-        codigo_maquina.push_back(linha_codigo_maquina);
-        contador_linha++;
+        machine_code.push_back(line_machine_code);
+        line_counter++;
     }
 }
 
