@@ -131,7 +131,7 @@ map<string, int> first_pass(ifstream& file) {
 }
 
 
-void segunda_passagem(ifstream& file, map<string, int>& symbol_table) {
+void second_pass(ifstream& file, map<string, int>& symbol_table) {
     int position_counter = 0, line_counter = 1;
     string line, delimiter = " ";
     map<string, pair<string, int>> instruction_table;
