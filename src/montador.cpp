@@ -36,24 +36,31 @@ void build_instruction_table(map<string, pair<string, int>>& instruction_table) 
     return;
 }
 
-void pre_processing(ifstream& file) {
-    string line;
+vector<string> pre_processing(ifstream& file) {
+    string line, delimiter = " ";
     bool macro = false;
-    vector<string> macro_body;
+    size_t pos;
+    vector<string> macro_body, pre_processed_code;
     // vamos definir a mnt assim????
     map<string, int> macro_name_table;
     vector<vector<string>> macro_definition_table;
     while (getline(file, line)) {
         trim(line);
-        if (macro) {
-            macro_body.push_back(line);
-            continue;
+
+        while ((pos = line.find(delimiter)) != line.npos) {
+            line.erase(pos);
         }
 
         if (line.find("ENDMACRO") != line.npos) {
             macro_definition_table.push_back(macro_body);
             macro_body.clear();
             macro = false;
+            continue;
+        }
+
+        if (macro) {
+            macro_body.push_back(line);
+            continue;
         }
 
         if (line.find("MACRO") != line.npos) {
@@ -63,6 +70,23 @@ void pre_processing(ifstream& file) {
             } else {
                 macro_name_table.insert({macro_name, macro_definition_table.size()});
                 macro = true;
+            }
+            continue;
+        } 
+
+        int i = 0;
+        string macro_name = "";
+
+        while (line[i] <= 90) {
+            macro_name += line[i];
+        }
+
+        if (macro_name_table.count(macro_name) == 0) {
+            cout << "Erro! Macro não declarada!\n";
+        } else {
+            // ainda sem tratar os parametros das macros
+            for (auto l : macro_definition_table[macro_name_table[macro_name]]) {
+                pre_processed_code.push_back(l);
             }
         }
     }
