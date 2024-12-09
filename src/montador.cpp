@@ -45,13 +45,18 @@ vector<string> pre_processing(ifstream& file) {
     map<string, int> macro_name_table;
     vector<vector<string>> macro_definition_table;
     while (getline(file, line)) {
-        trim(line);
-
+        string token;
+        vector<string> tokens;
         while ((pos = line.find(delimiter)) != line.npos) {
-            line.erase(pos);
+            token = line.substr(0, pos);
+            trim(token);
+            if (token.size()) {
+                tokens.push_back(token);
+            }
+            line.erase(0, pos+delimiter.length());
         }
 
-        if (line.find("ENDMACRO") != line.npos) {
+        if (tokens[0] == "ENDMACRO") {
             macro_definition_table.push_back(macro_body);
             macro_body.clear();
             macro = false;
@@ -59,12 +64,16 @@ vector<string> pre_processing(ifstream& file) {
         }
 
         if (macro) {
-            macro_body.push_back(line);
+            string temp = "";
+            for (auto t : tokens) {
+                temp += t+" ";
+            }
+            macro_body.push_back(temp+'\n');
             continue;
         }
 
-        if (line.find("MACRO") != line.npos) {
-            string macro_name = line.substr(0, line.find(':'));
+        if (tokens[1].find("MACRO") != tokens[1].npos) {
+            string macro_name = tokens[0].substr(0, tokens[0].size()-1);
             if (macro_name_table.count(macro_name) == 1) {
                 cout << "Erro! Macro redefinida!\n";
             } else {
@@ -74,22 +83,15 @@ vector<string> pre_processing(ifstream& file) {
             continue;
         } 
 
-        int i = 0;
-        string macro_name = "";
-
-        while (line[i] <= 90) {
-            macro_name += line[i];
-        }
-
-        if (macro_name_table.count(macro_name) == 0) {
-            cout << "Erro! Macro não declarada!\n";
-        } else {
+        if (macro_name_table.count(tokens[0]) == 1) {
             // ainda sem tratar os parametros das macros
-            for (auto l : macro_definition_table[macro_name_table[macro_name]]) {
+            for (auto l : macro_definition_table[macro_name_table[tokens[0]]]) {
                 pre_processed_code.push_back(l);
             }
         }
     }
+
+    return pre_processed_code;
 }
 
 map<string, int> first_pass(ifstream& file) {
