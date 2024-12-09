@@ -94,10 +94,10 @@ vector<string> pre_processing(ifstream& file) {
     return pre_processed_code;
 }
 
-map<string, int> first_pass(ifstream& file) {
+map<string, pair<int, int*>> first_pass(ifstream& file) {
     int position_counter = 0, line_counter = 1;
     string line, delimiter = " ";
-    map<string, int> symbol_table;
+    map<string, pair<int, int*>> symbol_table;
     map<string, pair<string, int>> instruction_table;
     map<string, int> directives_table = {{"CONST", 1}, {"SPACE", 1}};
 
@@ -106,7 +106,7 @@ map<string, int> first_pass(ifstream& file) {
     while (getline(file, line)) {
         vector<string> tokens;
         size_t pos = 0;
-        string token;
+        string token, label;
 
         if (line.find("BEGIN") != line.npos || line.find("END") != line.npos) {
             linker = true;
@@ -130,12 +130,13 @@ map<string, int> first_pass(ifstream& file) {
         }
 
         if (tokens[0].find(':') != tokens[0].npos) {
-            // caso que existe rótulo na line
+            // caso que existe rótulo na linha
             tokens[0].erase(tokens[0].end());
-            if (symbol_table.count(tokens[0]) == 1) {
+            label = tokens[0];
+            if (symbol_table.count(label) == 1) {
                 cout << "Erro! Símbolo redefinido!\n";
             } else {
-                symbol_table.insert({tokens[0], position_counter});
+                symbol_table.insert({label, {position_counter, (int*) malloc(4)}});
             }
             tokens.erase(tokens.begin());
         }
@@ -152,6 +153,9 @@ map<string, int> first_pass(ifstream& file) {
         } else {
             if (directives_table.count(operation) == 1) {
                 // chama subrotina que executa a tarefa TODO
+                if (operation == "CONST") {
+                    *(symbol_table[label].second) = stoi(tokens[1]);                   
+                }
                 position_counter += directives_table[operation];
             } else {
                 cout << "Erro! Operação não identificada!\n";
