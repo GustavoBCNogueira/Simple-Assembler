@@ -41,19 +41,29 @@ vector<string> pre_processing(ifstream& file) {
     bool macro = false;
     size_t pos;
     vector<string> macro_body, pre_processed_code;
-    // vamos definir a mnt assim????
     map<string, int> macro_name_table;
     vector<vector<string>> macro_definition_table;
+
     while (getline(file, line)) {
         string token;
         vector<string> tokens;
         while ((pos = line.find(delimiter)) != line.npos) {
             token = line.substr(0, pos);
             trim(token);
+
+            // descartando os comentários
+            if (token.find(";") != token.npos) {
+                break;
+            }
+
             if (token.size()) {
                 tokens.push_back(token);
             }
             line.erase(0, pos+delimiter.length());
+        }
+
+        if (line.find(";") == line.npos) {
+            tokens.push_back(line);
         }
 
         if (tokens[0] == "ENDMACRO") {
@@ -119,15 +129,6 @@ map<string, pair<int, int*>> first_pass(ifstream& file) {
             line.erase(0, pos+delimiter.length());
         }
         tokens.push_back(line);
-        
-        // ignorando os comentários
-        for (int i = 0; i < tokens.size(); i++) {
-            auto it = tokens[i].find(";");
-            if (it != tokens[i].npos) {
-                tokens.erase(tokens.begin()+i, tokens.end());
-                break;
-            }
-        }
 
         if (tokens[0].find(':') != tokens[0].npos) {
             // caso que existe rótulo na linha
@@ -154,7 +155,7 @@ map<string, pair<int, int*>> first_pass(ifstream& file) {
             if (directives_table.count(operation) == 1) {
                 // chama subrotina que executa a tarefa TODO
                 if (operation == "CONST") {
-                    *(symbol_table[label].second) = stoi(tokens[1]);                   
+                    *symbol_table[label].second = stoi(tokens[1]);                   
                 }
                 position_counter += directives_table[operation];
             } else {
@@ -169,7 +170,7 @@ map<string, pair<int, int*>> first_pass(ifstream& file) {
 }
 
 
-void second_pass(ifstream& file, map<string, int>& symbol_table) {
+vector<string> second_pass(ifstream& file, map<int, int*>& symbol_table) {
     int position_counter = 0, line_counter = 1;
     string line, delimiter = " ";
     map<string, pair<string, int>> instruction_table;
@@ -199,28 +200,29 @@ void second_pass(ifstream& file, map<string, int>& symbol_table) {
         tokens.push_back(line); // temos que ver isso caso tiver comentarios
 
 
-        // considerando que todos os operandos são símbolos
-        for (int i = 1; i < tokens.size(); i++) {
-            if (symbol_table.count(tokens[i]) == 0) {
-                cout << "Erro! Símbolo redefinido!\n";
-            }
-        }
+        // // considerando que todos os operandos são símbolos
+        // for (int i = 1; i < tokens.size(); i++) {
+        //     if (symbol_table.count(tokens[i]) == 0) {
+        //         cout << "Erro! Símbolo redefinido!\n";
+        //     }
+        // }
+
+        line_machine_code += to_string(position_counter);
 
         if (instruction_table.count(tokens[0]) == 1) {
-            // adiciona o endereço no código máquina ????
-            line_machine_code += to_string(position_counter);
 
             line_machine_code += instruction_table[tokens[0]].first;
             for (int i = 1; i < tokens.size(); i++) {
-                line_machine_code += to_string(symbol_table[tokens[i]]);
+                line_machine_code += tokens[i];
             }
             position_counter += instruction_table[tokens[0]].second;
         } else {
             if (directives_table.count(tokens[0]) == 1) {
-                // adiciona o endereço no código máquina ????
-                line_machine_code += to_string(position_counter);
-                line_machine_code += "XX"; // se for CONST, coloca o valor da constante
-                // chama a subrotina que executa a diretiva TODO
+                if (tokens[0] == "SPACE") {
+                    line_machine_code += "XX";
+                } else {
+                    line_machine_code += to_string(*symbol_table[position_counter]);
+                }
                 position_counter += directives_table[tokens[0]];
             } else {
                 cout << "Erro! Operação não indentificada!\n";
@@ -230,6 +232,8 @@ void second_pass(ifstream& file, map<string, int>& symbol_table) {
         machine_code.push_back(line_machine_code);
         line_counter++;
     }
+
+    return machine_code;
 }
 
 int main() {
