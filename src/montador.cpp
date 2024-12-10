@@ -241,16 +241,22 @@ vector<string> second_pass(vector<string> pre_processed_code, map<int, int*>& sy
     return machine_code;
 }
 
-int main() {
-    string fileName;
-    cin >> fileName;
+int main(int argc, char* argv[]) {
+    string fileName = argv[1];
 
-    if (fileName.empty()) 
-        cout << "Erro! " << fileName << "não tem nada!\n";
-    else {
-        ifstream inputStream(fileName);
+    ifstream inputFile(fileName);
+
+    if (!inputFile.is_open()) {
+        cerr << "Erro ao abrir o arquivo: " << fileName << '\n';
+        return 1;
+    }
+    
+    string line;
+    
+    while (getline(inputFile, line)) {
+        cout << line << '\n';
     }
 
-
+    inputFile.close();
     return 0;
 }
