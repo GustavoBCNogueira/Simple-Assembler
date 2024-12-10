@@ -98,22 +98,31 @@ vector<string> pre_processing(ifstream& file) {
             for (auto l : macro_definition_table[macro_name_table[tokens[0]]]) {
                 pre_processed_code.push_back(l);
             }
+        } else {
+            // código reusado
+            string temp = "";
+            
+            for (auto t : tokens) {
+                temp += t+" ";
+            }
+            
+            pre_processed_code.push_back(temp+'\n');
         }
     }
 
     return pre_processed_code;
 }
 
-map<string, pair<int, int*>> first_pass(ifstream& file) {
+map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
     int position_counter = 0, line_counter = 1;
-    string line, delimiter = " ";
+    string delimiter = " ";
     map<string, pair<int, int*>> symbol_table;
     map<string, pair<string, int>> instruction_table;
     map<string, int> directives_table = {{"CONST", 1}, {"SPACE", 1}};
 
     build_instruction_table(instruction_table);
 
-    while (getline(file, line)) {
+    for (string line : pre_processed_code) {
         vector<string> tokens;
         size_t pos = 0;
         string token, label;
@@ -170,16 +179,16 @@ map<string, pair<int, int*>> first_pass(ifstream& file) {
 }
 
 
-vector<string> second_pass(ifstream& file, map<int, int*>& symbol_table) {
+vector<string> second_pass(vector<string> pre_processed_code, map<int, int*>& symbol_table) {
     int position_counter = 0, line_counter = 1;
-    string line, delimiter = " ";
+    string delimiter = " ";
     map<string, pair<string, int>> instruction_table;
     map<string, int> directives_table = {{"CONST", 1}, {"SPACE", 1}};
     vector<string> machine_code;
 
     build_instruction_table(instruction_table);
 
-    while (getline(file, line)) {
+    for (string line : pre_processed_code) {
         vector<string> tokens;
         size_t pos = 0;
         string token, line_machine_code = "";
@@ -187,17 +196,13 @@ vector<string> second_pass(ifstream& file, map<int, int*>& symbol_table) {
         while ((pos = line.find(delimiter)) != line.npos) {
             token = line.substr(0, pos);
 
-            if (token.find(';') != token.npos) {
-                break;
-            }
-
             if (token.find(':') != token.npos) {
-                tokens.push_back(token);
+                continue;
             }
 
             line.erase(0, pos+delimiter.length());
         }
-        tokens.push_back(line); // temos que ver isso caso tiver comentarios
+        tokens.push_back(line);
 
 
         // // considerando que todos os operandos são símbolos
