@@ -28,12 +28,20 @@ inline void trim(string &s) {
 void build_instruction_table(map<string, pair<string, int>>& instruction_table) {
     // primeiro elemento do pair: opcode
     // segundo elemento do pair: número de operandos
-    instruction_table = {{"add", {"01", 2}}, {"sub", {"02", 2}}, {"mul", {"03", 2}},
-                         {"div", {"04", 2}}, {"jmp", {"05", 2}}, {"jmpn", {"06", 2}}, 
-                         {"jmpp", {"07", 2}}, {"jmpz", {"08", 2}}, {"copy", {"09", 3}}, 
-                         {"load", {"10", 2}}, {"store", {"11", 2}}, {"input", {"12", 2}}, 
-                         {"output", {"13", 2}}, {"stop", {"14", 1}}};
+    instruction_table = {{"ADD", {"01", 2}}, {"SUB", {"02", 2}}, {"MUL", {"03", 2}},
+                         {"MULT", {"03", 2}}, {"DIV", {"04", 2}}, {"JMP", {"05", 2}}, 
+                         {"JMPN", {"06", 2}}, {"JMPP", {"07", 2}}, {"JMPZ", {"08", 2}}, 
+                         {"COPY", {"09", 3}}, {"LOAD", {"10", 2}}, {"STORE", {"11", 2}}, 
+                         {"INPUT", {"12", 2}}, {"OUTPUT", {"13", 2}}, {"STOP", {"14", 1}}};
     return;
+}
+
+map<int, int*> transform_symbol_table(map<string, pair<int, int*>>& symbol_table) {
+    map<int, int*> m;
+    for (auto s : symbol_table) 
+        m.insert({s.second.first, s.second.second});
+
+    return m;
 }
 
 vector<string> pre_processing(ifstream& file) {
@@ -47,23 +55,28 @@ vector<string> pre_processing(ifstream& file) {
     while (getline(file, line)) {
         string token;
         vector<string> tokens;
-        while ((pos = line.find(delimiter)) != line.npos) {
-            token = line.substr(0, pos);
-            trim(token);
 
-            // descartando os comentários
-            if (token.find(";") != token.npos) {
-                break;
-            }
-
-            if (token.size()) {
-                tokens.push_back(token);
-            }
-            line.erase(0, pos+delimiter.length());
-        }
-
-        if (line.find(";") == line.npos) {
+        if (line.find(delimiter) == line.npos) {
             tokens.push_back(line);
+        } else {
+            while ((pos = line.find(delimiter)) != line.npos) {
+                token = line.substr(0, pos);
+                trim(token);
+
+                // descartando os comentários
+                if (token.find(";") != token.npos) {
+                    break;
+                }
+
+                if (token.size()) {
+                    tokens.push_back(token);
+                }
+                line.erase(0, pos+delimiter.length());
+            }
+
+            if (line.find(";") == line.npos) {
+                tokens.push_back(line);
+            }
         }
 
         if (tokens[0] == "ENDMACRO") {
@@ -78,11 +91,11 @@ vector<string> pre_processing(ifstream& file) {
             for (auto t : tokens) {
                 temp += t+" ";
             }
-            macro_body.push_back(temp+'\n');
+            macro_body.push_back(temp);
             continue;
         }
 
-        if (tokens[1].find("MACRO") != tokens[1].npos) {
+        if (tokens.size() > 1 && tokens[1].find("MACRO") != tokens[1].npos) {
             string macro_name = tokens[0].substr(0, tokens[0].size()-1);
             if (macro_name_table.count(macro_name) == 1) {
                 cout << "Erro! Macro redefinida!\n";
@@ -106,7 +119,7 @@ vector<string> pre_processing(ifstream& file) {
                 temp += t+" ";
             }
             
-            pre_processed_code.push_back(temp+'\n');
+            pre_processed_code.push_back(temp);
         }
     }
 
@@ -118,7 +131,7 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
     string delimiter = " ";
     map<string, pair<int, int*>> symbol_table;
     map<string, pair<string, int>> instruction_table;
-    map<string, int> directives_table = {{"CONST", 1}, {"SPACE", 1}};
+    map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}};
 
     build_instruction_table(instruction_table);
 
@@ -134,14 +147,16 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
 
         while ((pos = line.find(delimiter)) != line.npos) {
             token = line.substr(0, pos);
+            if (token.find(",") != token.npos) {
+                token.erase(token.find(","));
+            }
             tokens.push_back(token);
             line.erase(0, pos+delimiter.length());
         }
-        tokens.push_back(line);
 
         if (tokens[0].find(':') != tokens[0].npos) {
             // caso que existe rótulo na linha
-            tokens[0].erase(tokens[0].end());
+            tokens[0].erase(tokens[0].find(':'));
             label = tokens[0];
             if (symbol_table.count(label) == 1) {
                 cout << "Erro! Símbolo redefinido!\n";
@@ -156,7 +171,7 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
         if (instruction_table.count(operation) == 1) {
             // verificando apenas se a quantidade de operandos está correta, 
             // falta verificar a corretude (2a passagem)
-            if (tokens.size()-1 != instruction_table[tokens[0]].second) { 
+            if (tokens.size() != instruction_table[operation].second) { 
                 cout << "Erro! Operandos inválidos!\n";
             }
             position_counter += instruction_table[operation].second;
@@ -179,11 +194,11 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
 }
 
 
-vector<string> second_pass(vector<string> pre_processed_code, map<int, int*>& symbol_table) {
+vector<string> second_pass(vector<string> pre_processed_code, map<string, pair<int, int*>> st, map<int, int*>& symbol_table) {
     int position_counter = 0, line_counter = 1;
     string delimiter = " ";
     map<string, pair<string, int>> instruction_table;
-    map<string, int> directives_table = {{"CONST", 1}, {"SPACE", 1}};
+    map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}};
     vector<string> machine_code;
 
     build_instruction_table(instruction_table);
@@ -196,13 +211,16 @@ vector<string> second_pass(vector<string> pre_processed_code, map<int, int*>& sy
         while ((pos = line.find(delimiter)) != line.npos) {
             token = line.substr(0, pos);
 
-            if (token.find(':') != token.npos) {
-                continue;
+            if (token.find(",") != token.npos) {
+                token.erase(token.find(","));
+            }
+
+            if (token.find(':') == token.npos) {
+                tokens.push_back(token);
             }
 
             line.erase(0, pos+delimiter.length());
         }
-        tokens.push_back(line);
 
 
         // // considerando que todos os operandos são símbolos
@@ -212,13 +230,12 @@ vector<string> second_pass(vector<string> pre_processed_code, map<int, int*>& sy
         //     }
         // }
 
-        line_machine_code += to_string(position_counter);
+        line_machine_code += to_string(position_counter) + " ";
 
         if (instruction_table.count(tokens[0]) == 1) {
-
-            line_machine_code += instruction_table[tokens[0]].first;
+            line_machine_code += instruction_table[tokens[0]].first + " ";
             for (int i = 1; i < tokens.size(); i++) {
-                line_machine_code += tokens[i];
+                line_machine_code += to_string(st[tokens[i]].first) + " ";
             }
             position_counter += instruction_table[tokens[0]].second;
         } else {
@@ -251,10 +268,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    string line;
-    
-    while (getline(inputFile, line)) {
-        cout << line << '\n';
+    vector<string> pp = pre_processing(inputFile);
+    map<string, pair<int, int*>> fp = first_pass(pp);
+    map<int, int*> symbol_table = transform_symbol_table(fp);
+    vector<string> sp = second_pass(pp, fp, symbol_table);
+
+    for (auto l : sp) {
+        cout << l << '\n';
     }
 
     inputFile.close();
