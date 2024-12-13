@@ -47,14 +47,13 @@ map<int, int*> transform_symbol_table(map<string, pair<int, int*>>& symbol_table
 vector<string> pre_processing(ifstream& file) {
     string line, delimiter = " ";
     bool macro = false;
-    size_t pos;
-    vector<string> macro_body, pre_processed_code;
+    vector<string> pre_processed_code, macro_definition_table;
     map<string, int> macro_name_table;
-    vector<vector<string>> macro_definition_table;
 
     while (getline(file, line)) {
         string token;
         vector<string> tokens;
+        size_t pos;
 
         if (line.find(delimiter) == line.npos) {
             tokens.push_back(line);
@@ -71,6 +70,7 @@ vector<string> pre_processing(ifstream& file) {
                 if (token.size()) {
                     tokens.push_back(token);
                 }
+
                 line.erase(0, pos+delimiter.length());
             }
 
@@ -79,37 +79,42 @@ vector<string> pre_processing(ifstream& file) {
             }
         }
 
-        if (tokens[0] == "ENDMACRO") {
-            macro_definition_table.push_back(macro_body);
-            macro_body.clear();
-            macro = false;
-            continue;
-        }
-
         if (macro) {
             string temp = "";
+
             for (auto t : tokens) {
                 temp += t+" ";
             }
-            macro_body.push_back(temp);
+
+            macro_definition_table.push_back(temp);
+            
+            if (temp.find("ENDMACRO") != temp.npos) {
+                macro = false;
+            }
+
             continue;
         }
 
         if (tokens.size() > 1 && tokens[1].find("MACRO") != tokens[1].npos) {
             string macro_name = tokens[0].substr(0, tokens[0].size()-1);
+
             if (macro_name_table.count(macro_name) == 1) {
                 cout << "Erro! Macro redefinida!\n";
             } else {
                 macro_name_table.insert({macro_name, macro_definition_table.size()});
                 macro = true;
             }
+           
             continue;
         } 
 
         if (macro_name_table.count(tokens[0]) == 1) {
             // ainda sem tratar os parametros das macros
-            for (auto l : macro_definition_table[macro_name_table[tokens[0]]]) {
-                pre_processed_code.push_back(l);
+            int idx = macro_name_table[tokens[0]];
+           
+            while (macro_definition_table[idx].find("ENDMACRO") == macro_definition_table[idx].npos) {
+                pre_processed_code.push_back(macro_definition_table[idx]);
+                idx++;
             }
         } else {
             // código reusado
@@ -221,14 +226,6 @@ vector<string> second_pass(vector<string> pre_processed_code, map<string, pair<i
 
             line.erase(0, pos+delimiter.length());
         }
-
-
-        // // considerando que todos os operandos são símbolos
-        // for (int i = 1; i < tokens.size(); i++) {
-        //     if (symbol_table.count(tokens[i]) == 0) {
-        //         cout << "Erro! Símbolo redefinido!\n";
-        //     }
-        // }
 
         line_machine_code += to_string(position_counter) + " ";
 
