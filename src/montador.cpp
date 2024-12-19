@@ -46,14 +46,28 @@ map<int, int*> transform_symbol_table(map<string, pair<int, int*>>& symbol_table
 
 vector<string> pre_processing(ifstream& file) {
     string line, delimiter = " ";
-    bool macro = false;
-    vector<string> pre_processed_code, macro_definition_table;
+    bool macro = false, text = false;
+    vector<string> pre_processed_code, text_code, data_code, macro_definition_table;
     map<string, int> macro_name_table;
 
     while (getline(file, line)) {
+        if (line.empty()) {
+            continue;
+        }
+
+        if (line.find("TEXT") != line.npos) {
+            text = true;
+            continue;
+        } 
+        
+        if (line.find("DATA") != line.npos) {
+            text = false;
+            continue;
+        }
+
         string token;
         vector<string> tokens;
-        size_t pos;
+        size_t pos, comma;
 
         if (line.find(delimiter) == line.npos) {
             tokens.push_back(line);
@@ -65,6 +79,11 @@ vector<string> pre_processing(ifstream& file) {
                 // descartando os comentários
                 if (token.find(";") != token.npos) {
                     break;
+                }
+
+                while ((comma = token.find(",")) != line.npos) {
+                    tokens.push_back(token.substr(0, comma));
+                    token.erase(0, comma+1);
                 }
 
                 if (token.size()) {
@@ -124,9 +143,19 @@ vector<string> pre_processing(ifstream& file) {
                 temp += t+" ";
             }
             
-            pre_processed_code.push_back(temp);
+            if (text) {
+                text_code.push_back(temp);
+            } else {
+                data_code.push_back(temp);
+            }
         }
     }
+
+    for (string l : text_code) 
+        pre_processed_code.push_back(l);
+    
+    for (string l : data_code) 
+        pre_processed_code.push_back(l);
 
     return pre_processed_code;
 }
@@ -238,7 +267,7 @@ vector<string> second_pass(vector<string> pre_processed_code, map<string, pair<i
         } else {
             if (directives_table.count(tokens[0]) == 1) {
                 if (tokens[0] == "SPACE") {
-                    line_machine_code += "XX";
+                    line_machine_code += "00";
                 } else {
                     line_machine_code += to_string(*symbol_table[position_counter]);
                 }
