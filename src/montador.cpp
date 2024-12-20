@@ -55,12 +55,14 @@ vector<string> pre_processing(ifstream& file) {
             continue;
         }
 
-        if (line.find("TEXT") != line.npos) {
+        transform(line.begin(), line.end(), line.begin(), ::toupper);
+
+        if (line == "SECTION TEXT") { 
             text = true;
             continue;
         } 
         
-        if (line.find("DATA") != line.npos) {
+        if (line == "SECTION DATA") {
             text = false;
             continue;
         }
@@ -200,6 +202,10 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
             tokens.erase(tokens.begin());
         }
 
+        if (tokens.size() == 0) {
+            continue;
+        }
+
         string operation = tokens[0];
         
         if (instruction_table.count(operation) == 1) {
@@ -213,7 +219,15 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
             if (directives_table.count(operation) == 1) {
                 // chama subrotina que executa a tarefa TODO
                 if (operation == "CONST") {
-                    *symbol_table[label].second = stoi(tokens[1]);                   
+                    if (tokens[1].find("0x") != tokens[1].npos) {
+                        int num = 0;
+                        for (int i = tokens[1].size()-1; tokens[1][i] != 'x'; i--) {
+                            num += (int)pow(16, tokens[1].size()-1-i) + stoi(to_string(tokens[1][i]));
+                        }
+                        *symbol_table[label].second = num;
+                    } else{ 
+                        *symbol_table[label].second = stoi(tokens[1]);                   
+                    }
                 }
                 position_counter += directives_table[operation];
             } else {
@@ -295,11 +309,11 @@ int main(int argc, char* argv[]) {
     }
     
     vector<string> pp = pre_processing(inputFile);
-    map<string, pair<int, int*>> fp = first_pass(pp);
-    map<int, int*> symbol_table = transform_symbol_table(fp);
-    vector<string> sp = second_pass(pp, fp, symbol_table);
+    // map<string, pair<int, int*>> fp = first_pass(pp);
+    // map<int, int*> symbol_table = transform_symbol_table(fp);
+    // vector<string> sp = second_pass(pp, fp, symbol_table);
 
-    for (auto l : sp) {
+    for (auto l : pp) {
         cout << l << '\n';
     }
 
