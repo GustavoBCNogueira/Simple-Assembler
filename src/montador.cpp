@@ -44,7 +44,7 @@ map<int, int*> transform_symbol_table(map<string, pair<int, int*>>& symbol_table
     return m;
 }
 
-vector<string> pre_processing(ifstream& file) {
+ofstream pre_processing(ifstream& file) {
     string line, delimiter = " ";
     bool macro = false, text = false;
     vector<string> pre_processed_code, text_code, data_code, macro_definition_table;
@@ -159,7 +159,13 @@ vector<string> pre_processing(ifstream& file) {
     for (string l : data_code) 
         pre_processed_code.push_back(l);
 
-    return pre_processed_code;
+    ofstream file("./exemplo.pre");
+    ostream_iterator<string> file_iterator(file, "\n");
+
+    copy(begin(pre_processed_code), end(pre_processed_code), file_iterator);
+
+    file.close();
+    return file;
 }
 
 map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
@@ -194,8 +200,21 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
             // caso que existe rótulo na linha
             tokens[0].erase(tokens[0].find(':'));
             label = tokens[0];
+
+            if (isdigit(label[0])) {
+                cerr << "Erro na linha " << line_counter << ": erro léxico na criação do rótulo!\n";
+                continue;
+            } else {
+                for (auto c : label) {
+                    if (!(isalnum(c) || c == '_')) {
+                        cerr << "Erro na linha " << line_counter << ": erro léxico na criação do rótulo!\n";
+                        continue;
+                    }
+                }
+            }
+
             if (symbol_table.count(label) == 1) {
-                cout << "Erro! Símbolo redefinido!\n";
+                cerr << "Erro na linha " << line_counter << ": rótulo redefinido!\n";
             } else {
                 symbol_table.insert({label, {position_counter, (int*) malloc(4)}});
             }
@@ -212,7 +231,7 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
             // verificando apenas se a quantidade de operandos está correta, 
             // falta verificar a corretude (2a passagem)
             if (tokens.size() != instruction_table[operation].second) { 
-                cout << "Erro! Operandos inválidos!\n";
+                cerr << "Erro na linha " << line_counter << ": número de operandos errados para a instrução!\n";
             }
             position_counter += instruction_table[operation].second;
         } else {
@@ -231,7 +250,7 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
                 }
                 position_counter += directives_table[operation];
             } else {
-                cout << "Erro! Operação não identificada!\n";
+                cerr << "Erro na linha " << line_counter << ": operação não identificada!\n";
             }
         }
 
