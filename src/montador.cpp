@@ -44,7 +44,7 @@ map<int, int*> transform_symbol_table(map<string, pair<int, int*>>& symbol_table
     return m;
 }
 
-ofstream pre_processing(ifstream& file) {
+void pre_processing(ifstream& file) {
     string line, delimiter = " ";
     bool macro = false, text = false;
     vector<string> pre_processed_code, text_code, data_code, macro_definition_table;
@@ -159,25 +159,28 @@ ofstream pre_processing(ifstream& file) {
     for (string l : data_code) 
         pre_processed_code.push_back(l);
 
-    ofstream file("./exemplo.pre");
-    ostream_iterator<string> file_iterator(file, "\n");
+    ofstream pre_file("./exemplo.pre");
+    ostream_iterator<string> pre_file_iterator(pre_file, "\n");
 
-    copy(begin(pre_processed_code), end(pre_processed_code), file_iterator);
+    if (pre_file.is_open()) {
+        copy(begin(pre_processed_code), end(pre_processed_code), pre_file_iterator);
+    }
 
-    file.close();
-    return file;
+    pre_file.close();
+
+    return;
 }
 
-map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
+map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
     int position_counter = 0, line_counter = 1;
-    string delimiter = " ";
+    string delimiter = " ", line;
     map<string, pair<int, int*>> symbol_table;
     map<string, pair<string, int>> instruction_table;
     map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}};
 
     build_instruction_table(instruction_table);
 
-    for (string line : pre_processed_code) {
+    while (getline(pre_processed_code, line)) {
         vector<string> tokens;
         size_t pos = 0;
         string token, label;
@@ -228,8 +231,6 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
         string operation = tokens[0];
         
         if (instruction_table.count(operation) == 1) {
-            // verificando apenas se a quantidade de operandos está correta, 
-            // falta verificar a corretude (2a passagem)
             if (tokens.size() != instruction_table[operation].second) { 
                 cerr << "Erro na linha " << line_counter << ": número de operandos errados para a instrução!\n";
             }
@@ -261,19 +262,18 @@ map<string, pair<int, int*>> first_pass(vector<string> pre_processed_code) {
 }
 
 
-vector<string> second_pass(vector<string> pre_processed_code, map<string, pair<int, int*>> st, map<int, int*>& symbol_table) {
+void second_pass(ifstream& pre_processed_code, map<string, pair<int, int*>> st, map<int, int*>& symbol_table) {
     int position_counter = 0, line_counter = 1;
-    string delimiter = " ";
+    string delimiter = " ", machine_code = "", line;
     map<string, pair<string, int>> instruction_table;
     map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}};
-    vector<string> machine_code;
 
     build_instruction_table(instruction_table);
 
-    for (string line : pre_processed_code) {
+    while (getline(pre_processed_code, line)) {
         vector<string> tokens;
         size_t pos = 0;
-        string token, line_machine_code = "";
+        string token;
 
         while ((pos = line.find(delimiter)) != line.npos) {
             token = line.substr(0, pos);
@@ -289,20 +289,21 @@ vector<string> second_pass(vector<string> pre_processed_code, map<string, pair<i
             line.erase(0, pos+delimiter.length());
         }
 
-        line_machine_code += to_string(position_counter) + " ";
-
         if (instruction_table.count(tokens[0]) == 1) {
-            line_machine_code += instruction_table[tokens[0]].first + " ";
+            machine_code += instruction_table[tokens[0]].first + " ";
             for (int i = 1; i < tokens.size(); i++) {
-                line_machine_code += to_string(st[tokens[i]].first) + " ";
+                if (st.count(tokens[i]) == 0) {
+                    cerr << "Erro na linha " << line_counter << ": rótulo ausente!\n";
+                }
+                machine_code += to_string(st[tokens[i]].first) + " ";
             }
             position_counter += instruction_table[tokens[0]].second;
         } else {
             if (directives_table.count(tokens[0]) == 1) {
                 if (tokens[0] == "SPACE") {
-                    line_machine_code += "00";
+                    machine_code += "00 ";
                 } else {
-                    line_machine_code += to_string(*symbol_table[position_counter]);
+                    machine_code += to_string(*symbol_table[position_counter]);
                 }
                 position_counter += directives_table[tokens[0]];
             } else {
@@ -310,11 +311,21 @@ vector<string> second_pass(vector<string> pre_processed_code, map<string, pair<i
             }
         }
 
-        machine_code.push_back(line_machine_code);
         line_counter++;
     }
 
-    return machine_code;
+    ofstream obj_code("./exemplo.obj");
+    // ostream_iterator<string> obj_code_iterator(obj_code, "\n");    
+
+    // copy(begin(machine_code), end(machine_code), obj_code_iterator);
+
+    if (obj_code.is_open()) {
+        obj_code << machine_code;
+    }
+
+    obj_code.close();
+
+    return;
 }
 
 int main(int argc, char* argv[]) {
@@ -327,13 +338,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    vector<string> pp = pre_processing(inputFile);
-    // map<string, pair<int, int*>> fp = first_pass(pp);
-    // map<int, int*> symbol_table = transform_symbol_table(fp);
-    // vector<string> sp = second_pass(pp, fp, symbol_table);
-
-    for (auto l : pp) {
-        cout << l << '\n';
+    if (fileName.substr(fileName.size()-3, 3) == "asm") {
+        pre_processing(inputFile);
+    } else if (fileName.substr(fileName.size()-3, 3) == "pre") {
+        map<string, pair<int, int*>> st = first_pass(inputFile);
+        map<int, int*> symbol_table = transform_symbol_table(st);
+        second_pass(inputFile, st, symbol_table);
+    } else if (fileName.substr(fileName.size()-3, 3) == "obj") {
+        // ligação
     }
 
     inputFile.close();
