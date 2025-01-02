@@ -4,6 +4,7 @@ using namespace std;
 
 // variável global para indicar se o programa tem que ser ligado ou não
 bool linker = false;
+string fileName;
 
 // trim from start (in place)
 inline void ltrim(string &s) {
@@ -28,10 +29,10 @@ inline void trim(string &s) {
 void build_instruction_table(map<string, pair<string, int>>& instruction_table) {
     // primeiro elemento do pair: opcode
     // segundo elemento do pair: número de operandos
-    instruction_table = {{"ADD", {"01", 2}}, {"SUB", {"02", 2}}, {"MUL", {"03", 2}},
-                         {"MULT", {"03", 2}}, {"DIV", {"04", 2}}, {"JMP", {"05", 2}}, 
-                         {"JMPN", {"06", 2}}, {"JMPP", {"07", 2}}, {"JMPZ", {"08", 2}}, 
-                         {"COPY", {"09", 3}}, {"LOAD", {"10", 2}}, {"STORE", {"11", 2}}, 
+    instruction_table = {{"ADD", {"1", 2}}, {"SUB", {"2", 2}}, {"MUL", {"3", 2}},
+                         {"MULT", {"3", 2}}, {"DIV", {"4", 2}}, {"JMP", {"5", 2}}, 
+                         {"JMPN", {"6", 2}}, {"JMPP", {"7", 2}}, {"JMPZ", {"8", 2}}, 
+                         {"COPY", {"9", 3}}, {"LOAD", {"10", 2}}, {"STORE", {"11", 2}}, 
                          {"INPUT", {"12", 2}}, {"OUTPUT", {"13", 2}}, {"STOP", {"14", 1}}};
     return;
 }
@@ -83,9 +84,26 @@ void pre_processing(ifstream& file) {
                     break;
                 }
 
-                while ((comma = token.find(",")) != line.npos) {
-                    tokens.push_back(token.substr(0, comma));
-                    token.erase(0, comma+1);
+                if (token == "+" || token.find("+") != token.npos) {
+                    tokens[tokens.size()-1] += token;
+                    // cout << "token " << token << " added in second if\n";
+                    
+                    if ((pos = line.find(delimiter)) != line.npos) {
+                        string t = line.substr(0, pos);
+                        trim(t);
+                        tokens[tokens.size()-1] += t;
+                    } else {
+                        tokens[tokens.size()-1] += line;
+                    }
+
+                    continue;
+                }
+
+                if (token.find(",") != token.npos) {
+                    while ((comma = token.find(",")) != token.npos) {
+                        tokens.push_back(token.substr(0, comma));
+                        token.erase(0, comma+1);
+                    }
                 }
 
                 if (token.size()) {
@@ -95,8 +113,25 @@ void pre_processing(ifstream& file) {
                 line.erase(0, pos+delimiter.length());
             }
 
-            if (line.find(";") == line.npos) {
-                tokens.push_back(line);
+            if (line.find(";") == line.npos && line.size()) {
+                // fazer uma função para não ficar repetindo o trecho de código
+                token = line;
+
+                if (token.find("+") != token.npos) {
+                    tokens.push_back(token);
+                    continue;
+                }
+
+                if (token.find(",") != token.npos) {
+                    while ((comma = token.find(",")) != token.npos) {
+                        tokens.push_back(token.substr(0, comma));
+                        token.erase(0, comma+1);
+                    }
+                }
+
+                if (token.size()) {
+                    tokens.push_back(token);
+                }
             }
         }
 
@@ -120,7 +155,7 @@ void pre_processing(ifstream& file) {
             string macro_name = tokens[0].substr(0, tokens[0].size()-1);
 
             if (macro_name_table.count(macro_name) == 1) {
-                cout << "Erro! Macro redefinida!\n";
+                cerr << "Erro! Macro redefinida!\n";
             } else {
                 macro_name_table.insert({macro_name, macro_definition_table.size()});
                 macro = true;
@@ -159,7 +194,8 @@ void pre_processing(ifstream& file) {
     for (string l : data_code) 
         pre_processed_code.push_back(l);
 
-    ofstream pre_file("./exemplo.pre");
+    string preFileName = fileName.substr(0, fileName.size()-4) + ".pre";
+    ofstream pre_file("./" + preFileName);
     ostream_iterator<string> pre_file_iterator(pre_file, "\n");
 
     if (pre_file.is_open()) {
@@ -176,7 +212,7 @@ map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
     string delimiter = " ", line;
     map<string, pair<int, int*>> symbol_table;
     map<string, pair<string, int>> instruction_table;
-    map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}};
+    map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 2}};
 
     build_instruction_table(instruction_table);
 
@@ -192,9 +228,6 @@ map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
 
         while ((pos = line.find(delimiter)) != line.npos) {
             token = line.substr(0, pos);
-            if (token.find(",") != token.npos) {
-                token.erase(token.find(","));
-            }
             tokens.push_back(token);
             line.erase(0, pos+delimiter.length());
         }
@@ -206,18 +239,24 @@ map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
 
             if (isdigit(label[0])) {
                 cerr << "Erro na linha " << line_counter << ": erro léxico na criação do rótulo!\n";
-                continue;
+                break;
             } else {
+                bool error = false;
                 for (auto c : label) {
                     if (!(isalnum(c) || c == '_')) {
                         cerr << "Erro na linha " << line_counter << ": erro léxico na criação do rótulo!\n";
-                        continue;
+                        error = true;
                     }
                 }
+
+                if (error) {
+                    break;
+                } 
             }
 
             if (symbol_table.count(label) == 1) {
                 cerr << "Erro na linha " << line_counter << ": rótulo redefinido!\n";
+                break;
             } else {
                 symbol_table.insert({label, {position_counter, (int*) malloc(4)}});
             }
@@ -229,29 +268,43 @@ map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
         }
 
         string operation = tokens[0];
+
+        if (operation.find(":") != operation.npos) {
+            cerr << "Erro na linha " << line_counter << ": rótulo dobrado na mesma linha!\n";
+            break;
+        }
         
         if (instruction_table.count(operation) == 1) {
             if (tokens.size() != instruction_table[operation].second) { 
                 cerr << "Erro na linha " << line_counter << ": número de operandos errados para a instrução!\n";
+                break;
             }
             position_counter += instruction_table[operation].second;
         } else {
             if (directives_table.count(operation) == 1) {
-                // chama subrotina que executa a tarefa TODO
+                if (tokens.size() > 2) {
+                    cerr << "Erro na linha " << line_counter << ": número de operandos errados para a diretiva!\n";
+                    break;
+                }
                 if (operation == "CONST") {
                     if (tokens[1].find("0x") != tokens[1].npos) {
                         int num = 0;
                         for (int i = tokens[1].size()-1; tokens[1][i] != 'x'; i--) {
-                            num += (int)pow(16, tokens[1].size()-1-i) + stoi(to_string(tokens[1][i]));
+                            num += (int)pow(16, tokens[1].size()-1-i) * stoi(to_string(tokens[1][i]));
                         }
                         *symbol_table[label].second = num;
                     } else{ 
                         *symbol_table[label].second = stoi(tokens[1]);                   
                     }
+                } else {
+                    if (tokens.size() == 2) {
+                        symbol_table[label] = {symbol_table[label].first, (int*) malloc(4*stoi(tokens[1]))};
+                    }
                 }
                 position_counter += directives_table[operation];
             } else {
                 cerr << "Erro na linha " << line_counter << ": operação não identificada!\n";
+                break;
             }
         }
 
@@ -301,9 +354,9 @@ void second_pass(ifstream& pre_processed_code, map<string, pair<int, int*>> st, 
         } else {
             if (directives_table.count(tokens[0]) == 1) {
                 if (tokens[0] == "SPACE") {
-                    machine_code += "00 ";
+                    machine_code += "0 ";
                 } else {
-                    machine_code += to_string(*symbol_table[position_counter]);
+                    machine_code += to_string(*symbol_table[position_counter]) + " ";
                 }
                 position_counter += directives_table[tokens[0]];
             } else {
@@ -314,7 +367,8 @@ void second_pass(ifstream& pre_processed_code, map<string, pair<int, int*>> st, 
         line_counter++;
     }
 
-    ofstream obj_code("./exemplo.obj");
+    string objCodeName = fileName.substr(0, fileName.size()-4) + ".obj";
+    ofstream obj_code("./" + objCodeName);
     // ostream_iterator<string> obj_code_iterator(obj_code, "\n");    
 
     // copy(begin(machine_code), end(machine_code), obj_code_iterator);
@@ -329,7 +383,7 @@ void second_pass(ifstream& pre_processed_code, map<string, pair<int, int*>> st, 
 }
 
 int main(int argc, char* argv[]) {
-    string fileName = argv[1];
+    fileName = argv[1];
 
     ifstream inputFile(fileName);
 
@@ -343,6 +397,7 @@ int main(int argc, char* argv[]) {
     } else if (fileName.substr(fileName.size()-3, 3) == "pre") {
         map<string, pair<int, int*>> st = first_pass(inputFile);
         map<int, int*> symbol_table = transform_symbol_table(st);
+        ifstream inputFile(fileName);
         second_pass(inputFile, st, symbol_table);
     } else if (fileName.substr(fileName.size()-3, 3) == "obj") {
         // ligação
