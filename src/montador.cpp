@@ -58,6 +58,8 @@ void pre_processing(ifstream& file) {
 
         transform(line.begin(), line.end(), line.begin(), ::toupper);
 
+        line += " ";
+
         if (line == "SECTION TEXT") { 
             text = true;
             continue;
@@ -71,6 +73,7 @@ void pre_processing(ifstream& file) {
         string token;
         vector<string> tokens;
         size_t pos, comma;
+        bool is_pointer_arithmetic = false;
 
         if (line.find(delimiter) == line.npos) {
             tokens.push_back(line);
@@ -84,54 +87,30 @@ void pre_processing(ifstream& file) {
                     break;
                 }
 
-                if (token == "+" || token.find("+") != token.npos) {
+                if (is_pointer_arithmetic) {
                     tokens[tokens.size()-1] += token;
-                    // cout << "token " << token << " added in second if\n";
-                    
-                    if ((pos = line.find(delimiter)) != line.npos) {
-                        string t = line.substr(0, pos);
-                        trim(t);
-                        tokens[tokens.size()-1] += t;
-                    } else {
-                        tokens[tokens.size()-1] += line;
+                    is_pointer_arithmetic = false;
+                } else if (token.find("+") != token.npos) {
+                    if (token == "+") {
+                        tokens[tokens.size()-1] += token;
+                        is_pointer_arithmetic = true;
+                    } else if (token.substr(0, token.find("+")).size() > 0) {
+                        tokens.push_back(token);
+                    }
+                } else {
+                    if (token.find(",") != token.npos) {
+                        while ((comma = token.find(",")) != token.npos) {
+                            tokens.push_back(token.substr(0, comma));
+                            token.erase(0, comma+1);
+                        }
                     }
 
-                    continue;
-                }
-
-                if (token.find(",") != token.npos) {
-                    while ((comma = token.find(",")) != token.npos) {
-                        tokens.push_back(token.substr(0, comma));
-                        token.erase(0, comma+1);
+                    if (token.size()) {
+                        tokens.push_back(token);
                     }
-                }
-
-                if (token.size()) {
-                    tokens.push_back(token);
                 }
 
                 line.erase(0, pos+delimiter.length());
-            }
-
-            if (line.find(";") == line.npos && line.size()) {
-                // fazer uma função para não ficar repetindo o trecho de código
-                token = line;
-
-                if (token.find("+") != token.npos) {
-                    tokens.push_back(token);
-                    continue;
-                }
-
-                if (token.find(",") != token.npos) {
-                    while ((comma = token.find(",")) != token.npos) {
-                        tokens.push_back(token.substr(0, comma));
-                        token.erase(0, comma+1);
-                    }
-                }
-
-                if (token.size()) {
-                    tokens.push_back(token);
-                }
             }
         }
 
@@ -212,7 +191,7 @@ map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
     string delimiter = " ", line;
     map<string, pair<int, int*>> symbol_table;
     map<string, pair<string, int>> instruction_table;
-    map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 2}};
+    map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}, {"PUBLIC", 0}, {"EXTERN", 0}};
 
     build_instruction_table(instruction_table);
 
@@ -345,10 +324,14 @@ void second_pass(ifstream& pre_processed_code, map<string, pair<int, int*>> st, 
         if (instruction_table.count(tokens[0]) == 1) {
             machine_code += instruction_table[tokens[0]].first + " ";
             for (int i = 1; i < tokens.size(); i++) {
-                if (st.count(tokens[i]) == 0) {
+                size_t plus = tokens[i].find("+"); 
+                if (plus != tokens[i].npos && st.count(tokens[i].substr(0, plus)) == 1) {
+                    machine_code += to_string(st[tokens[i].substr(0, plus)].first + stoi(tokens[i].substr(plus+1))) + " ";
+                } else if (st.count(tokens[i]) == 1) {
+                    machine_code += to_string(st[tokens[i]].first) + " ";
+                } else {
                     cerr << "Erro na linha " << line_counter << ": rótulo ausente!\n";
                 }
-                machine_code += to_string(st[tokens[i]].first) + " ";
             }
             position_counter += instruction_table[tokens[0]].second;
         } else {
@@ -369,9 +352,6 @@ void second_pass(ifstream& pre_processed_code, map<string, pair<int, int*>> st, 
 
     string objCodeName = fileName.substr(0, fileName.size()-4) + ".obj";
     ofstream obj_code("./" + objCodeName);
-    // ostream_iterator<string> obj_code_iterator(obj_code, "\n");    
-
-    // copy(begin(machine_code), end(machine_code), obj_code_iterator);
 
     if (obj_code.is_open()) {
         obj_code << machine_code;
