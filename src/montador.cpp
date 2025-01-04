@@ -37,10 +37,10 @@ void build_instruction_table(map<string, pair<string, int>>& instruction_table) 
     return;
 }
 
-map<int, int*> transform_symbol_table(map<string, pair<int, int*>>& symbol_table) {
+map<int, int*> transform_symbol_table(map<string, pair<pair<int, int*>, bool>>& symbol_table) {
     map<int, int*> m;
     for (auto s : symbol_table) 
-        m.insert({s.second.first, s.second.second});
+        m.insert({s.second.first.first, s.second.first.second});
 
     return m;
 }
@@ -186,10 +186,12 @@ void pre_processing(ifstream& file) {
     return;
 }
 
-map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
+map<string, pair<pair<int, int*>, bool>> first_pass(ifstream& pre_processed_code) {
     int position_counter = 0, line_counter = 1;
     string delimiter = " ", line;
-    map<string, pair<int, int*>> symbol_table;
+    map<string, pair<pair<int, int*>, bool>> symbol_table;
+    map<string, pair<int, int*>> definitions_table;
+    map<string, vector<int>> usage_table;
     map<string, pair<string, int>> instruction_table;
     map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}, {"PUBLIC", 0}, {"EXTERN", 0}};
 
@@ -209,6 +211,12 @@ map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
             token = line.substr(0, pos);
             tokens.push_back(token);
             line.erase(0, pos+delimiter.length());
+        }
+
+        if (tokens[0] == "PUBLIC") {
+            definitions_table.insert({tokens[1], {0, (int*) malloc(4)}});
+        } else if (tokens[0] == "EXTERN") {
+            symbol_table.insert({tokens[1], {{0, (int*) malloc(4)}, 1}});
         }
 
         if (tokens[0].find(':') != tokens[0].npos) {
@@ -237,7 +245,7 @@ map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
                 cerr << "Erro na linha " << line_counter << ": rótulo redefinido!\n";
                 break;
             } else {
-                symbol_table.insert({label, {position_counter, (int*) malloc(4)}});
+                symbol_table.insert({label, {{position_counter, (int*) malloc(4)}, 0}});
             }
             tokens.erase(tokens.begin());
         }
@@ -271,9 +279,9 @@ map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
                         for (int i = tokens[1].size()-1; tokens[1][i] != 'x'; i--) {
                             num += (int)pow(16, tokens[1].size()-1-i) * stoi(to_string(tokens[1][i]));
                         }
-                        *symbol_table[label].second = num;
+                        *symbol_table[label].first.second = num;
                     } else{ 
-                        *symbol_table[label].second = stoi(tokens[1]);                   
+                        *symbol_table[label].first.second = stoi(tokens[1]);                   
                     }
                 } else {
                     if (tokens.size() == 2) {
@@ -290,11 +298,15 @@ map<string, pair<int, int*>> first_pass(ifstream& pre_processed_code) {
         line_counter++;
     }
 
+    for (auto d : definitions_table) {
+        definitions_table[d.first] = symbol_table[d.first].first;
+    }
+
     return symbol_table;     // retornando a tabela de símbolos para a segunda passagem
 }
 
 
-void second_pass(ifstream& pre_processed_code, map<string, pair<int, int*>> st, map<int, int*>& symbol_table) {
+void second_pass(ifstream& pre_processed_code, map<string, pair<pair<int, int*>, bool>> st, map<int, int*>& symbol_table) {
     int position_counter = 0, line_counter = 1;
     string delimiter = " ", machine_code = "", line;
     map<string, pair<string, int>> instruction_table;
@@ -324,11 +336,14 @@ void second_pass(ifstream& pre_processed_code, map<string, pair<int, int*>> st, 
         if (instruction_table.count(tokens[0]) == 1) {
             machine_code += instruction_table[tokens[0]].first + " ";
             for (int i = 1; i < tokens.size(); i++) {
+                // se o bool da TS for 1, anota na tabela de uso o nome e a posição em que é usado.
+
                 size_t plus = tokens[i].find("+"); 
+
                 if (plus != tokens[i].npos && st.count(tokens[i].substr(0, plus)) == 1) {
-                    machine_code += to_string(st[tokens[i].substr(0, plus)].first + stoi(tokens[i].substr(plus+1))) + " ";
+                    machine_code += to_string(st[tokens[i].substr(0, plus)].first.first + stoi(tokens[i].substr(plus+1))) + " ";
                 } else if (st.count(tokens[i]) == 1) {
-                    machine_code += to_string(st[tokens[i]].first) + " ";
+                    machine_code += to_string(st[tokens[i]].first.first) + " ";
                 } else {
                     cerr << "Erro na linha " << line_counter << ": rótulo ausente!\n";
                 }
@@ -375,7 +390,7 @@ int main(int argc, char* argv[]) {
     if (fileName.substr(fileName.size()-3, 3) == "asm") {
         pre_processing(inputFile);
     } else if (fileName.substr(fileName.size()-3, 3) == "pre") {
-        map<string, pair<int, int*>> st = first_pass(inputFile);
+        map<string, pair<pair<int, int*>, bool>> st = first_pass(inputFile);
         map<int, int*> symbol_table = transform_symbol_table(st);
         ifstream inputFile(fileName);
         second_pass(inputFile, st, symbol_table);
