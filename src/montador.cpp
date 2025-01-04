@@ -182,12 +182,11 @@ void pre_processing(ifstream& file) {
     return;
 }
 
-map<string, pair<pair<int, int*>, bool>> first_pass(ifstream& pre_processed_code) {
+pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> first_pass(ifstream& pre_processed_code) {
     int position_counter = 0, line_counter = 1;
     string delimiter = " ", line;
     map<string, pair<pair<int, int*>, bool>> symbol_table;
     map<string, pair<int, int*>> definitions_table;
-    map<string, vector<int>> usage_table;
     map<string, pair<string, int>> instruction_table;
     map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}, {"PUBLIC", 0}, {"EXTERN", 0}};
 
@@ -271,6 +270,7 @@ map<string, pair<pair<int, int*>, bool>> first_pass(ifstream& pre_processed_code
                     cerr << "Erro na linha " << line_counter << ": número de operandos errados para a diretiva!\n";
                     break;
                 }
+
                 if (operation == "CONST") {
                     if (tokens[1].find("0x") != tokens[1].npos) {
                         int num = 0;
@@ -300,14 +300,15 @@ map<string, pair<pair<int, int*>, bool>> first_pass(ifstream& pre_processed_code
         definitions_table[d.first] = symbol_table[d.first].first;
     }
 
-    return symbol_table;     // retornando a tabela de símbolos para a segunda passagem
+    return {symbol_table, definitions_table};     // retornando a tabela de símbolos para a segunda passagem
 }
 
 
-void second_pass(ifstream& pre_processed_code, map<string, pair<pair<int, int*>, bool>> st, map<int, int*>& symbol_table) {
+map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, pair<pair<int, int*>, bool>> st, map<int, int*>& symbol_table) {
     int position_counter = 0, line_counter = 1;
     string delimiter = " ", machine_code = "", line;
     map<string, pair<string, int>> instruction_table;
+    map<string, vector<int>> usage_table;
     map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}};
 
     build_instruction_table(instruction_table);
@@ -334,14 +335,29 @@ void second_pass(ifstream& pre_processed_code, map<string, pair<pair<int, int*>,
         if (instruction_table.count(tokens[0]) == 1) {
             machine_code += instruction_table[tokens[0]].first + " ";
             for (int i = 1; i < tokens.size(); i++) {
-                // se o bool da TS for 1, anota na tabela de uso o nome e a posição em que é usado.
-
                 size_t plus = tokens[i].find("+"); 
 
                 if (plus != tokens[i].npos && st.count(tokens[i].substr(0, plus)) == 1) {
-                    machine_code += to_string(st[tokens[i].substr(0, plus)].first.first + stoi(tokens[i].substr(plus+1))) + " ";
+                    string label = tokens[i].substr(0, plus);
+                    machine_code += to_string(st[label].first.first + stoi(tokens[i].substr(plus+1))) + " ";
+
+                    if (st[label].second) {
+                        if (usage_table.count(label) == 0) {
+                            usage_table.insert({label, {position_counter+i}});
+                        } else {
+                            usage_table[label].push_back(position_counter+i);
+                        }
+                    }
                 } else if (st.count(tokens[i]) == 1) {
                     machine_code += to_string(st[tokens[i]].first.first) + " ";
+
+                    if (st[tokens[i]].second) {
+                        if (usage_table.count(tokens[i]) == 0) {
+                            usage_table.insert({tokens[i], {position_counter+i}});
+                        } else {
+                            usage_table[tokens[i]].push_back(position_counter+i);
+                        }
+                    }
                 } else {
                     cerr << "Erro na linha " << line_counter << ": rótulo ausente!\n";
                 }
@@ -372,7 +388,7 @@ void second_pass(ifstream& pre_processed_code, map<string, pair<pair<int, int*>,
 
     obj_code.close();
 
-    return;
+    return usage_table;
 }
 
 int main(int argc, char* argv[]) {
@@ -388,10 +404,15 @@ int main(int argc, char* argv[]) {
     if (fileName.substr(fileName.size()-3, 3) == "asm") {
         pre_processing(inputFile);
     } else if (fileName.substr(fileName.size()-3, 3) == "pre") {
-        map<string, pair<pair<int, int*>, bool>> st = first_pass(inputFile);
-        map<int, int*> symbol_table = transform_symbol_table(st);
+        map<string, pair<pair<int, int*>, bool>> symbol_table;
+        map<string, pair<int, int*>> definitions_table;
+        map<string, vector<int>> usage_table;
+
+        tie(symbol_table, definitions_table) = first_pass(inputFile);
+        map<int, int*> st = transform_symbol_table(symbol_table);
+        
         ifstream inputFile(fileName);
-        second_pass(inputFile, st, symbol_table);
+        usage_table = second_pass(inputFile, symbol_table, st);
     } else if (fileName.substr(fileName.size()-3, 3) == "obj") {
         // ligação
     }
