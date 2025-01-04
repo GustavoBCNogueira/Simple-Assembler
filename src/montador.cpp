@@ -75,43 +75,39 @@ void pre_processing(ifstream& file) {
         size_t pos, comma;
         bool is_pointer_arithmetic = false;
 
-        if (line.find(delimiter) == line.npos) {
-            tokens.push_back(line);
-        } else {
-            while ((pos = line.find(delimiter)) != line.npos) {
-                token = line.substr(0, pos);
-                trim(token);
+        while ((pos = line.find(delimiter)) != line.npos) {
+            token = line.substr(0, pos);
+            trim(token);
 
-                // descartando os comentários
-                if (token.find(";") != token.npos) {
-                    break;
-                }
-
-                if (is_pointer_arithmetic) {
-                    tokens[tokens.size()-1] += token;
-                    is_pointer_arithmetic = false;
-                } else if (token.find("+") != token.npos) {
-                    if (token == "+") {
-                        tokens[tokens.size()-1] += token;
-                        is_pointer_arithmetic = true;
-                    } else if (token.substr(0, token.find("+")).size() > 0) {
-                        tokens.push_back(token);
-                    }
-                } else {
-                    if (token.find(",") != token.npos) {
-                        while ((comma = token.find(",")) != token.npos) {
-                            tokens.push_back(token.substr(0, comma));
-                            token.erase(0, comma+1);
-                        }
-                    }
-
-                    if (token.size()) {
-                        tokens.push_back(token);
-                    }
-                }
-
-                line.erase(0, pos+delimiter.length());
+            // descartando os comentários
+            if (token.find(";") != token.npos) {
+                break;
             }
+
+            if (is_pointer_arithmetic) {
+                tokens[tokens.size()-1] += token;
+                is_pointer_arithmetic = false;
+            } else if (token.find("+") != token.npos) {
+                if (token == "+") {
+                    tokens[tokens.size()-1] += token;
+                    is_pointer_arithmetic = true;
+                } else if (token.substr(0, token.find("+")).size() > 0) {
+                    tokens.push_back(token);
+                }
+            } else {
+                if (token.find(",") != token.npos) {
+                    while ((comma = token.find(",")) != token.npos) {
+                        tokens.push_back(token.substr(0, comma));
+                        token.erase(0, comma+1);
+                    }
+                }
+
+                if (token.size()) {
+                    tokens.push_back(token);
+                }
+            }
+
+            line.erase(0, pos+delimiter.length());
         }
 
         if (macro) {
@@ -215,8 +211,6 @@ map<string, pair<pair<int, int*>, bool>> first_pass(ifstream& pre_processed_code
 
         if (tokens[0] == "PUBLIC") {
             definitions_table.insert({tokens[1], {0, (int*) malloc(4)}});
-        } else if (tokens[0] == "EXTERN") {
-            symbol_table.insert({tokens[1], {{0, (int*) malloc(4)}, 1}});
         }
 
         if (tokens[0].find(':') != tokens[0].npos) {
@@ -259,6 +253,10 @@ map<string, pair<pair<int, int*>, bool>> first_pass(ifstream& pre_processed_code
         if (operation.find(":") != operation.npos) {
             cerr << "Erro na linha " << line_counter << ": rótulo dobrado na mesma linha!\n";
             break;
+        }
+
+        if (operation == "EXTERN") {
+            symbol_table.insert({label, {{0, (int*) malloc(4)}, 1}});
         }
         
         if (instruction_table.count(operation) == 1) {
