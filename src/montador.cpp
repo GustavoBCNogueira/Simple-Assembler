@@ -58,8 +58,6 @@ void pre_processing(ifstream& file) {
 
         transform(line.begin(), line.end(), line.begin(), ::toupper);
 
-        line += " ";
-
         if (line == "SECTION TEXT") { 
             text = true;
             continue;
@@ -69,6 +67,8 @@ void pre_processing(ifstream& file) {
             text = false;
             continue;
         }
+
+        line += " ";
 
         string token;
         vector<string> tokens;
@@ -209,6 +209,7 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
 
         if (tokens[0] == "PUBLIC") {
             definitions_table.insert({tokens[1], {0, (int*) malloc(4)}});
+            continue;
         }
 
         if (tokens[0].find(':') != tokens[0].npos) {
@@ -254,15 +255,17 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
             break;
         }
 
-        if (operation == "BEGIN") {
+        if (operation == "BEGIN" || operation == "END") {
             linker = true;
             continue;
         }
 
         if (operation == "EXTERN") {
-            symbol_table.insert({label, {{0, (int*) malloc(4)}, 1}});
+            cout << label << '\n';
+            symbol_table.insert({label, {{0, (int*) malloc(4)}, true}});
+            cout << symbol_table[label].second << '\n';
             continue;
-        }
+        }   
         
         if (instruction_table.count(operation) == 1) {
             if (tokens.size() != instruction_table[operation].second) { 
@@ -310,7 +313,7 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
 }
 
 
-map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, pair<pair<int, int*>, bool>> st, map<int, int*>& symbol_table) {
+map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, pair<pair<int, int*>, bool>> st, map<int, int*>& symbol_table, map<string, pair<int, int*>>& definitions_table) {
     int position_counter = 0, line_counter = 1;
     string delimiter = " ", machine_code = "", line;
     map<string, pair<string, int>> instruction_table;
@@ -399,8 +402,20 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
         line_counter++;
     }
 
-    string objCodeName = fileName.substr(0, fileName.size()-4) + ".obj";
+    string temp, objCodeName = fileName.substr(0, fileName.size()-4) + ".obj";
     ofstream obj_code("./" + objCodeName);
+
+    for (auto d : definitions_table) {
+        temp = "D, " + d.first + " " + to_string(d.second.first);
+        obj_code << temp + "\n";
+    }
+
+    for (auto u : usage_table) {
+        for (int i = 0; i < u.second.size(); i++) {
+            temp = "U, " + u.first + to_string(u.second[i]);
+            obj_code << temp;    
+        }
+    }
 
     if (obj_code.is_open()) {
         obj_code << machine_code;
@@ -477,7 +492,7 @@ int main(int argc, char* argv[]) {
         map<int, int*> st = transform_symbol_table(symbol_table);
         
         ifstream inputFile(fileName);
-        usage_table = second_pass(inputFile, symbol_table, st);
+        usage_table = second_pass(inputFile, symbol_table, st, definitions_table);
     } else if (fileName.substr(fileName.size()-3, 3) == "obj") {
         // ligação
     }
