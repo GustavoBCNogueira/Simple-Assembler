@@ -188,7 +188,7 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
     map<string, pair<pair<int, int*>, bool>> symbol_table;
     map<string, pair<int, int*>> definitions_table;
     map<string, pair<string, int>> instruction_table;
-    map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}, {"PUBLIC", 0}, {"EXTERN", 0}};
+    map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}};
 
     build_instruction_table(instruction_table);
 
@@ -197,8 +197,7 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
         size_t pos = 0;
         string token, label;
 
-        if (line.find("BEGIN") != line.npos || line.find("END") != line.npos) {
-            linker = true;
+        if (line == "END") {
             continue;
         }
 
@@ -240,6 +239,7 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
             } else {
                 symbol_table.insert({label, {{position_counter, (int*) malloc(4)}, 0}});
             }
+            
             tokens.erase(tokens.begin());
         }
 
@@ -254,8 +254,14 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
             break;
         }
 
+        if (operation == "BEGIN") {
+            linker = true;
+            continue;
+        }
+
         if (operation == "EXTERN") {
             symbol_table.insert({label, {{0, (int*) malloc(4)}, 1}});
+            continue;
         }
         
         if (instruction_table.count(operation) == 1) {
@@ -310,6 +316,7 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
     map<string, pair<string, int>> instruction_table;
     map<string, vector<int>> usage_table;
     map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}};
+    vector<string> file_names;
 
     build_instruction_table(instruction_table);
 
@@ -317,6 +324,10 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
         vector<string> tokens;
         size_t pos = 0;
         string token;
+
+        if (line.find("PUBLIC") != line.npos || line.find("EXTERN") != line.npos) {
+            continue;
+        }
 
         while ((pos = line.find(delimiter)) != line.npos) {
             token = line.substr(0, pos);
@@ -327,6 +338,11 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
 
             if (token.find(':') == token.npos) {
                 tokens.push_back(token);
+            } else {
+                token.erase(token.size()-1);
+                if (st.count(token) == 0) {
+                    file_names.push_back(token);
+                }
             }
 
             line.erase(0, pos+delimiter.length());
@@ -372,7 +388,11 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
                 }
                 position_counter += directives_table[tokens[0]];
             } else {
-                cout << "Erro! Operação não indentificada!\n";
+                if (tokens[0] == "END") {
+                    // guarda todas as informações e associa elas ao último elemento do file_names.
+                } else if (tokens[0] != "BEGIN") {
+                    cout << "Erro! Operação não indentificada!\n";
+                }
             }
         }
 
