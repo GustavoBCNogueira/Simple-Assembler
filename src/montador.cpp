@@ -255,8 +255,12 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
             break;
         }
 
-        if (operation == "BEGIN" || operation == "END") {
+        if (operation == "BEGIN") {
             linker = true;
+            continue;
+        }
+
+        if (operation == "END") {
             continue;
         }
 
@@ -356,12 +360,7 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
 
         if (instruction_table.count(operation) == 1) {
             machine_code += instruction_table[tokens[0]].first + " ";
-            if (linker) {
-                bit_map += "0 ";
-                for (int i = 0; i < instruction_table[operation].second-1; i++) {
-                    bit_map += "1 ";
-                }
-            }
+            bit_map += "0 ";
 
             for (int i = 1; i < tokens.size(); i++) {
                 size_t plus = tokens[i].find("+"); 
@@ -371,21 +370,28 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
                     machine_code += to_string(st[label].first.first + stoi(tokens[i].substr(plus+1))) + " ";
 
                     if (linker && st[label].second) {
+                        bit_map += "0 ";
                         if (usage_table.count(label) == 0) {
                             usage_table.insert({label, {position_counter+i}});
                         } else {
                             usage_table[label].push_back(position_counter+i);
                         }
-                    }
+                    } else {
+                        bit_map += "1 ";
+                    } 
                 } else if (st.count(tokens[i]) == 1) {
-                    machine_code += to_string(st[tokens[i]].first.first) + " ";
+                    string label = tokens[i];
+                    machine_code += to_string(st[label].first.first) + " ";
 
-                    if (linker && st[tokens[i]].second) {
-                        if (usage_table.count(tokens[i]) == 0) {
-                            usage_table.insert({tokens[i], {position_counter+i}});
+                    if (linker && st[label].second) {
+                        bit_map += "0 ";
+                        if (usage_table.count(label) == 0) {
+                            usage_table.insert({label, {position_counter+i}});
                         } else {
-                            usage_table[tokens[i]].push_back(position_counter+i);
+                            usage_table[label].push_back(position_counter+i);
                         }
+                    } else {
+                        bit_map += "1 ";
                     }
                 } else {
                     cerr << "Erro na linha " << line_counter << ": rótulo ausente!\n";
