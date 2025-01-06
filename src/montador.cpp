@@ -188,7 +188,7 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
     map<string, pair<pair<int, int*>, bool>> symbol_table;
     map<string, pair<int, int*>> definitions_table;
     map<string, pair<string, int>> instruction_table;
-    map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}};
+    map<string, int> directives_table = {{"CONST", 1}, {"SPACE", 1}};
 
     build_instruction_table(instruction_table);
 
@@ -261,9 +261,7 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
         }
 
         if (operation == "EXTERN") {
-            cout << label << '\n';
-            symbol_table.insert({label, {{0, (int*) malloc(4)}, true}});
-            cout << symbol_table[label].second << '\n';
+            symbol_table[label].second = true;
             continue;
         }   
         
@@ -290,12 +288,15 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
                     } else{ 
                         *symbol_table[label].first.second = stoi(tokens[1]);                   
                     }
+                    position_counter += directives_table[operation];
                 } else {
                     if (tokens.size() == 2) {
                         symbol_table[label] = {symbol_table[label].first, (int*) malloc(4*stoi(tokens[1]))};
+                        position_counter += stoi(tokens[1]);
+                    } else {
+                        position_counter += directives_table[operation];
                     }
                 }
-                position_counter += directives_table[operation];
             } else {
                 cerr << "Erro na linha " << line_counter << ": operação não identificada!\n";
                 break;
@@ -315,10 +316,10 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
 
 map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, pair<pair<int, int*>, bool>> st, map<int, int*>& symbol_table, map<string, pair<int, int*>>& definitions_table) {
     int position_counter = 0, line_counter = 1;
-    string delimiter = " ", machine_code = "", line;
+    string delimiter = " ", machine_code = "", line, bit_map = "";
     map<string, pair<string, int>> instruction_table;
     map<string, vector<int>> usage_table;
-    map<string, int> directives_table = {{"CONST", 2}, {"SPACE", 1}};
+    map<string, int> directives_table = {{"CONST", 1}, {"SPACE", 1}};
     vector<string> file_names;
 
     build_instruction_table(instruction_table);
@@ -328,7 +329,7 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
         size_t pos = 0;
         string token;
 
-        if (line.find("PUBLIC") != line.npos || line.find("EXTERN") != line.npos) {
+        if (linker && (line.find("PUBLIC") != line.npos || line.find("EXTERN") != line.npos)) {
             continue;
         }
 
@@ -351,8 +352,17 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
             line.erase(0, pos+delimiter.length());
         }
 
-        if (instruction_table.count(tokens[0]) == 1) {
+        string operation = tokens[0];
+
+        if (instruction_table.count(operation) == 1) {
             machine_code += instruction_table[tokens[0]].first + " ";
+            if (linker) {
+                bit_map += "0 ";
+                for (int i = 0; i < instruction_table[operation].second-1; i++) {
+                    bit_map += "1 ";
+                }
+            }
+
             for (int i = 1; i < tokens.size(); i++) {
                 size_t plus = tokens[i].find("+"); 
 
@@ -360,7 +370,7 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
                     string label = tokens[i].substr(0, plus);
                     machine_code += to_string(st[label].first.first + stoi(tokens[i].substr(plus+1))) + " ";
 
-                    if (st[label].second) {
+                    if (linker && st[label].second) {
                         if (usage_table.count(label) == 0) {
                             usage_table.insert({label, {position_counter+i}});
                         } else {
@@ -370,7 +380,7 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
                 } else if (st.count(tokens[i]) == 1) {
                     machine_code += to_string(st[tokens[i]].first.first) + " ";
 
-                    if (st[tokens[i]].second) {
+                    if (linker && st[tokens[i]].second) {
                         if (usage_table.count(tokens[i]) == 0) {
                             usage_table.insert({tokens[i], {position_counter+i}});
                         } else {
@@ -381,9 +391,10 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
                     cerr << "Erro na linha " << line_counter << ": rótulo ausente!\n";
                 }
             }
-            position_counter += instruction_table[tokens[0]].second;
+            position_counter += instruction_table[operation].second;
         } else {
-            if (directives_table.count(tokens[0]) == 1) {
+            if (directives_table.count(operation) == 1) {
+                bit_map += "0 ";
                 if (tokens[0] == "SPACE") {
                     machine_code += "0 ";
                 } else {
@@ -391,10 +402,10 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
                 }
                 position_counter += directives_table[tokens[0]];
             } else {
-                if (tokens[0] == "END") {
-                    // guarda todas as informações e associa elas ao último elemento do file_names.
-                } else if (tokens[0] != "BEGIN") {
-                    cout << "Erro! Operação não indentificada!\n";
+                if (operation == "BEGIN" || operation == "END") {
+                    continue;
+                } else {
+                    cout << "Erro na linha " << line_counter << "! Operação não indentificada!\n";   
                 }
             }
         }
@@ -405,16 +416,20 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
     string temp, objCodeName = fileName.substr(0, fileName.size()-4) + ".obj";
     ofstream obj_code("./" + objCodeName);
 
-    for (auto d : definitions_table) {
-        temp = "D, " + d.first + " " + to_string(d.second.first);
-        obj_code << temp + "\n";
-    }
-
-    for (auto u : usage_table) {
-        for (int i = 0; i < u.second.size(); i++) {
-            temp = "U, " + u.first + to_string(u.second[i]);
-            obj_code << temp;    
+    if (linker) {
+        for (auto d : definitions_table) {
+            temp = "D, " + d.first + " " + to_string(d.second.first);
+            obj_code << temp + "\n";
         }
+
+        for (auto u : usage_table) {
+            for (int i = 0; i < u.second.size(); i++) {
+                temp = "U, " + u.first + " " + to_string(u.second[i]);
+                obj_code << temp + "\n";    
+            }
+        }
+
+        obj_code << "R, " + bit_map + "\n";
     }
 
     if (obj_code.is_open()) {
