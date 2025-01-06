@@ -400,10 +400,18 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
             position_counter += instruction_table[operation].second;
         } else {
             if (directives_table.count(operation) == 1) {
-                bit_map += "0 ";
                 if (tokens[0] == "SPACE") {
-                    machine_code += "0 ";
+                    if (tokens.size() > 1) {
+                        for (int i = 0; i < stoi(tokens[1]); i++) {
+                            machine_code += "0 ";
+                            bit_map += "0 ";
+                        }
+                    } else {
+                        machine_code += "0 ";
+                        bit_map += "0 ";
+                    }
                 } else {
+                    bit_map += "0 ";
                     machine_code += to_string(*symbol_table[position_counter]) + " ";
                 }
                 position_counter += directives_table[tokens[0]];
