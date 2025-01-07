@@ -3,8 +3,7 @@
 using namespace std;
 
 // variável global para indicar se o programa tem que ser ligado ou não
-bool linker = false;
-string fileName;
+bool has_link = false;
 
 // trim from start (in place)
 inline void ltrim(string &s) {
@@ -45,7 +44,7 @@ map<int, int*> transform_symbol_table(map<string, pair<pair<int, int*>, bool>>& 
     return m;
 }
 
-void pre_processing(ifstream& file) {
+void pre_processing(string& file_name, ifstream& file) {
     string line, delimiter = " ";
     bool macro = false, text = false;
     vector<string> pre_processed_code, text_code, data_code, macro_definition_table;
@@ -174,12 +173,12 @@ void pre_processing(ifstream& file) {
     for (string l : data_code) 
         pre_processed_code.push_back(l);
 
-    string preFileName = fileName.substr(0, fileName.size()-4) + ".pre";
-    ofstream pre_file("./" + preFileName);
-    ostream_iterator<string> pre_file_iterator(pre_file, "\n");
+    string pre_processed_file_name = file_name.substr(0, file_name.size()-4) + ".pre";
+    ofstream pre_file("./" + pre_processed_file_name);
+    ostream_iterator<string> pre_processed_file_iterator(pre_file, "\n");
 
     if (pre_file.is_open()) {
-        copy(begin(pre_processed_code), end(pre_processed_code), pre_file_iterator);
+        copy(begin(pre_processed_code), end(pre_processed_code), pre_processed_file_iterator);
     }
 
     pre_file.close();
@@ -257,7 +256,7 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
         }
 
         if (operation == "BEGIN") {
-            linker = true;
+            has_link = true;
             continue;
         }
 
@@ -319,7 +318,7 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
 }
 
 
-map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, pair<pair<int, int*>, bool>> st, map<int, int*>& symbol_table, map<string, pair<int, int*>>& definitions_table) {
+map<string, vector<int>> second_pass(string& file_name, ifstream& pre_processed_code, map<string, pair<pair<int, int*>, bool>> st, map<int, int*>& symbol_table, map<string, pair<int, int*>>& definitions_table) {
     int position_counter = 0, line_counter = 1;
     string delimiter = " ", machine_code = "", line, bit_map = "";
     map<string, pair<string, int>> instruction_table;
@@ -334,7 +333,7 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
         size_t pos = 0;
         string token;
 
-        if (linker && (line.find("PUBLIC") != line.npos || line.find("EXTERN") != line.npos)) {
+        if (has_link && (line.find("PUBLIC") != line.npos || line.find("EXTERN") != line.npos)) {
             continue;
         }
 
@@ -370,7 +369,7 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
                     string label = tokens[i].substr(0, plus);
                     machine_code += to_string(st[label].first.first + stoi(tokens[i].substr(plus+1))) + " ";
 
-                    if (linker && st[label].second) {
+                    if (has_link && st[label].second) {
                         bit_map += "0 ";
                         if (usage_table.count(label) == 0) {
                             usage_table.insert({label, {position_counter+i}});
@@ -384,7 +383,7 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
                     string label = tokens[i];
                     machine_code += to_string(st[label].first.first) + " ";
 
-                    if (linker && st[label].second) {
+                    if (has_link && st[label].second) {
                         bit_map += "0 ";
                         if (usage_table.count(label) == 0) {
                             usage_table.insert({label, {position_counter+i}});
@@ -428,10 +427,10 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
         line_counter++;
     }
 
-    string temp, objCodeName = fileName.substr(0, fileName.size()-4) + ".obj";
-    ofstream obj_code("./" + objCodeName);
+    string temp, obj_code_name = file_name.substr(0, file_name.size()-4) + ".obj";
+    ofstream obj_code("./" + obj_code_name);
 
-    if (linker) {
+    if (has_link) {
         for (auto d : definitions_table) {
             temp = "D, " + d.first + " " + to_string(d.second.first);
             obj_code << temp + "\n";
@@ -457,7 +456,7 @@ map<string, vector<int>> second_pass(ifstream& pre_processed_code, map<string, p
 }
 
 
-void ligador(vector<string> objFiles) {
+void linker(vector<string> objFiles) {
     map<string, int> global_symbol_table; // Tabela global de símbolos
     vector<string> resolved_code;        // Código final resolvido
     int base_address = 0;                // Endereço base para realocação
@@ -502,31 +501,44 @@ void ligador(vector<string> objFiles) {
 
 
 int main(int argc, char* argv[]) {
-    fileName = argv[1];
+    vector<string> file_names;
 
-    ifstream inputFile(fileName);
-
-    if (!inputFile.is_open()) {
-        cerr << "Erro ao abrir o arquivo: " << fileName << '\n';
-        return 1;
+    for (int i = 1; i < argc; i++) {
+        file_names.push_back(argv[i]);
     }
-    
-    if (fileName.substr(fileName.size()-3, 3) == "asm") {
-        pre_processing(inputFile);
-    } else if (fileName.substr(fileName.size()-3, 3) == "pre") {
-        map<string, pair<pair<int, int*>, bool>> symbol_table;
-        map<string, pair<int, int*>> definitions_table;
-        map<string, vector<int>> usage_table;
 
-        tie(symbol_table, definitions_table) = first_pass(inputFile);
-        map<int, int*> st = transform_symbol_table(symbol_table);
+    if (file_names.size() == 1) {
+        string file_name = file_names[0];
+        ifstream input_file(file_name);
+
+        if (!input_file.is_open()) {
+            cerr << "Erro ao abrir o arquivo: " << file_name << '\n';
+            return 1;
+        }
         
-        ifstream inputFile(fileName);
-        usage_table = second_pass(inputFile, symbol_table, st, definitions_table);
-    } else if (fileName.substr(fileName.size()-3, 3) == "obj") {
-        // ligação
-    }
+        if (file_name.substr(file_name.size()-4, 4) == ".asm") {
+            pre_processing(file_name, input_file);
+        } else if (file_name.substr(file_name.size()-4, 4) == ".pre") {
+            map<string, pair<pair<int, int*>, bool>> symbol_table;
+            map<string, pair<int, int*>> definitions_table;
+            map<string, vector<int>> usage_table;
 
-    inputFile.close();
+            tie(symbol_table, definitions_table) = first_pass(input_file);
+            map<int, int*> st = transform_symbol_table(symbol_table);
+            
+            ifstream input_file(file_name);
+            usage_table = second_pass(file_name, input_file, symbol_table, st, definitions_table);
+            
+            input_file.close();
+        } else {
+            cerr << "Erro: arquivo(s) inválido(s)!\n";
+        }
+    } else {
+        if (all_of(file_names.begin(), file_names.end(), [](string& s) {return s.substr(s.size()-4, 4) == ".obj";})) {
+            linker(file_names);
+        } else {
+            cerr << "Erro: arquivo(s) inválido(s)!\n";
+        }
+    }
     return 0;
 }
