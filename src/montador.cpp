@@ -324,7 +324,6 @@ map<string, vector<int>> second_pass(string& file_name, ifstream& pre_processed_
     map<string, pair<string, int>> instruction_table;
     map<string, vector<int>> usage_table;
     map<string, int> directives_table = {{"CONST", 1}, {"SPACE", 1}};
-    vector<string> file_names;
 
     build_instruction_table(instruction_table);
 
@@ -348,9 +347,6 @@ map<string, vector<int>> second_pass(string& file_name, ifstream& pre_processed_
                 tokens.push_back(token);
             } else {
                 token.erase(token.size()-1);
-                if (st.count(token) == 0) {
-                    file_names.push_back(token);
-                }
             }
 
             line.erase(0, pos+delimiter.length());
@@ -456,89 +452,34 @@ map<string, vector<int>> second_pass(string& file_name, ifstream& pre_processed_
 }
 
 
-void linker(vector<string> objFiles) {
-    map<string, int> global_symbol_table; // Tabela global de símbolos
-    vector<string> resolved_code;        // Código final resolvido
-    int base_address = 0;                // Endereço base para realocação
-
-    for (const auto& file : objFiles) {
-        ifstream inputFile(file);
-        if (!inputFile.is_open()) {
-            cerr << "Erro ao abrir o arquivo: " << file << '\n';
-            continue;
-        }
-
-        string line;
-        while (getline(inputFile, line)) {
-            if (line[0] == 'D') {
-                // Definições
-                string symbol;
-                int value;
-                sscanf(line.c_str(), "D, %s %d", &symbol, &value);
-                global_symbol_table[symbol] = value + base_address;
-            } else if (line[0] == 'U') {
-                // Referências não resolvidas (ainda não tratadas)
-            } else if (line[0] == 'R') {
-                // Tabela de realocação
-                // Lógica para aplicar as realocações ao código
-            } else {
-                // Código do programa
-                resolved_code.push_back(line);
-            }
-        }
-
-        // Atualiza endereço base
-        base_address += resolved_code.size();
-        inputFile.close();
-    }
-
-    // Imprime código final resolvido
-    for (const auto& line : resolved_code) {
-        cout << line << '\n';
-    }
-}
-
-
-
 int main(int argc, char* argv[]) {
-    vector<string> file_names;
+    string file_name = argv[1];
+   
+    ifstream input_file(file_name);
 
-    for (int i = 1; i < argc; i++) {
-        file_names.push_back(argv[i]);
+    if (!input_file.is_open()) {
+        cerr << "Erro ao abrir o arquivo: " << file_name << '\n';
+        return 1;
     }
+    
+    if (file_name.substr(file_name.size()-4, 4) == ".asm") {
+        pre_processing(file_name, input_file);
+    } else if (file_name.substr(file_name.size()-4, 4) == ".pre") {
+        map<string, pair<pair<int, int*>, bool>> symbol_table;
+        map<string, pair<int, int*>> definitions_table;
+        map<string, vector<int>> usage_table;
 
-    if (file_names.size() == 1) {
-        string file_name = file_names[0];
-        ifstream input_file(file_name);
-
-        if (!input_file.is_open()) {
-            cerr << "Erro ao abrir o arquivo: " << file_name << '\n';
-            return 1;
-        }
+        tie(symbol_table, definitions_table) = first_pass(input_file);
+        map<int, int*> st = transform_symbol_table(symbol_table);
         
-        if (file_name.substr(file_name.size()-4, 4) == ".asm") {
-            pre_processing(file_name, input_file);
-        } else if (file_name.substr(file_name.size()-4, 4) == ".pre") {
-            map<string, pair<pair<int, int*>, bool>> symbol_table;
-            map<string, pair<int, int*>> definitions_table;
-            map<string, vector<int>> usage_table;
-
-            tie(symbol_table, definitions_table) = first_pass(input_file);
-            map<int, int*> st = transform_symbol_table(symbol_table);
-            
-            ifstream input_file(file_name);
-            usage_table = second_pass(file_name, input_file, symbol_table, st, definitions_table);
-            
-            input_file.close();
-        } else {
-            cerr << "Erro: arquivo(s) inválido(s)!\n";
-        }
+        ifstream input_file(file_name);
+        usage_table = second_pass(file_name, input_file, symbol_table, st, definitions_table);
+        
+        input_file.close();
     } else {
-        if (all_of(file_names.begin(), file_names.end(), [](string& s) {return s.substr(s.size()-4, 4) == ".obj";})) {
-            linker(file_names);
-        } else {
-            cerr << "Erro: arquivo(s) inválido(s)!\n";
-        }
+        cerr << "Erro: arquivo(s) inválido(s)!\n";
+        return 1;
     }
+
     return 0;
 }
