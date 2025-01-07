@@ -58,12 +58,12 @@ void pre_processing(ifstream& file) {
 
         transform(line.begin(), line.end(), line.begin(), ::toupper);
 
-        if (line == "SECTION TEXT") { 
+        if (line.find("SECTION TEXT") != line.npos) { 
             text = true;
             continue;
         } 
         
-        if (line == "SECTION DATA") {
+        if (line.find("SECTION DATA") != line.npos) {
             text = false;
             continue;
         }
@@ -73,7 +73,7 @@ void pre_processing(ifstream& file) {
         string token;
         vector<string> tokens;
         size_t pos, comma;
-        bool is_pointer_arithmetic = false;
+        bool is_pointer_arithmetic = false, comment = false;
 
         while ((pos = line.find(delimiter)) != line.npos) {
             token = line.substr(0, pos);
@@ -81,7 +81,8 @@ void pre_processing(ifstream& file) {
 
             // descartando os comentários
             if (token.find(";") != token.npos) {
-                break;
+                token = token.substr(0, token.find(";"));
+                comment = true;
             }
 
             if (is_pointer_arithmetic) {
@@ -105,6 +106,10 @@ void pre_processing(ifstream& file) {
                 if (token.size()) {
                     tokens.push_back(token);
                 }
+            }
+
+            if (comment) {
+                break;
             }
 
             line.erase(0, pos+delimiter.length());
@@ -196,10 +201,6 @@ pair<map<string, pair<pair<int, int*>, bool>>, map<string, pair<int, int*>>> fir
         vector<string> tokens;
         size_t pos = 0;
         string token, label;
-
-        if (line == "END") {
-            continue;
-        }
 
         while ((pos = line.find(delimiter)) != line.npos) {
             token = line.substr(0, pos);
