@@ -78,6 +78,11 @@ void pre_processing(string& file_name, ifstream& file) {
             token = line.substr(0, pos);
             trim(token);
 
+            if (token.size() == 0) {
+                line.erase(0, pos+delimiter.length());
+                continue;
+            }
+
             // descartando os comentários
             if (token.find(";") != token.npos) {
                 token = token.substr(0, token.find(";"));
@@ -92,12 +97,26 @@ void pre_processing(string& file_name, ifstream& file) {
                     tokens[tokens.size()-1] += token;
                     is_pointer_arithmetic = true;
                 } else if (token.substr(0, token.find("+")).size() > 0) {
+                    if (token.substr(token.find("+")+1).size() == 0) {
+                        is_pointer_arithmetic = true;
+                    }
                     tokens.push_back(token);
+                } else {
+                    tokens[tokens.size()-1] += token;
                 }
             } else {
                 if (token.find(",") != token.npos) {
+                    string t;
                     while ((comma = token.find(",")) != token.npos) {
-                        tokens.push_back(token.substr(0, comma));
+                        t = token.substr(0, comma);
+                        trim(t);
+                    
+                        if (t.size() == 0) {
+                            token.erase(0, comma+1);
+                            continue;
+                        }
+
+                        tokens.push_back(t);
                         token.erase(0, comma+1);
                     }
                 }
