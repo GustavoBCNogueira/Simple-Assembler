@@ -2,37 +2,22 @@
 
 using namespace std;
 
-void linker(vector<string> objFiles) {
+void linker(vector<string> obj_files) {
     vector<int> offsets = {0};
     map<string, int> global_definition_table;
     map<string, vector<int>> usage_table;
+    vector<int> machine_code;
     int curr = 0;
 
-    for (string& fn : objFiles) {
+    for (string& fn : obj_files) {
         ifstream obj_file(fn);
-        string line, machine_code;    
+        string line;    
         vector<string> labels;    
 
         if (!obj_file.is_open()) {
             cerr << "Erro ao abrir o arquivo: " << fn << '\n';
             return;
         }
-
-        // obj_file.seekg(-1, ios::end);
-
-        // char ch;
-        // while (true) {
-        //     obj_file.get(ch);
-
-        //     if ((int) obj_file.tellg() <= 1) {
-        //         obj_file.seekg(0);
-        //         break;
-        //     } else if (ch == '\n') {
-        //         break;
-        //     } else {
-        //         obj_file.seekg(-2, ios::cur);
-        //     }
-        // }
 
         while (getline(obj_file, line)) {
             if (line.substr(0, 2) == "D,") {
@@ -42,7 +27,6 @@ void linker(vector<string> objFiles) {
                 string label = line.substr(0, pos);
                 
                 line.erase(0, pos+1);
-                
                 string position = line.substr((pos = line.find(" "))+1);
 
                 global_definition_table[label] = stoi(position);
@@ -52,25 +36,22 @@ void linker(vector<string> objFiles) {
             } else if (line.substr(0, 2) == "R,") {
                 continue;
             } else {
-                machine_code = line;
+                string address;
+                size_t pos;
+                while ((pos = line.find(" ")) != line.npos) {
+                    address = line.substr(0, pos);
+                    
+                    if (address == " ") {
+                        break;
+                    } 
+
+                    machine_code.push_back(stoi(address));
+                    line.erase(0, pos+1);
+                }
             }
         }
-        
-        size_t pos;
-        string token;
-        int count = 0;
-        while ((pos = machine_code.find(" ")) != machine_code.npos) {
-            token = machine_code.substr(0, pos);
-            
-            if (token == " ") {
-                break;
-            } 
 
-            count++;
-            machine_code.erase(0, pos+1);
-        }
-
-        offsets.push_back(offsets[curr]+count);
+        offsets.push_back(offsets[curr]+machine_code.size());
 
         for (string& l : labels) {
             global_definition_table[l] += offsets[curr];
@@ -80,7 +61,73 @@ void linker(vector<string> objFiles) {
         curr++;
     }
 
+    curr = 0;
 
+    for (string& fn : obj_files) {
+        ifstream obj_file(fn);
+        string line;    
+
+        if (!obj_file.is_open()) {
+            cerr << "Erro ao abrir o arquivo: " << fn << '\n';
+            return;
+        }
+
+        while (getline(obj_file, line)) {
+            if (line.substr(0, 2) == "D,") {
+                continue;
+            } else if (line.substr(0, 2) == "U,") {
+                line = line.substr(3);
+                
+                size_t pos = line.find(" ");
+                string label = line.substr(0, pos);
+                
+                line.erase(0, pos+1);
+                string position = line.substr((pos = line.find(" "))+1);
+
+                machine_code[offsets[curr]+stoi(position)] += global_definition_table[label];
+            } else if (line.substr(0, 2) == "R,") {
+                line = line.substr(3);
+    
+                int bit_map_index = 0;
+                size_t pos;
+                string bit;
+
+                while ((pos = line.find(" ")) != line.npos) {
+                    bit = line.substr(0, pos);
+                    
+                    if (bit == " ") {
+                        break;
+                    } 
+
+                    if (bit == "1") {
+                        machine_code[offsets[curr]+bit_map_index] += offsets[curr];
+                    }
+
+                    bit_map_index++;
+                    line.erase(0, pos+1);
+                }
+
+            } else {
+                continue;
+            }
+        }
+
+        obj_file.close();
+        curr++;
+    }
+
+    for (int i : machine_code) {
+        cout << i << " ";
+    }
+    cout << '\n';
+
+    ofstream executable_file("./" + obj_files[0].substr(0, obj_files[0].size()-4) + ".e");
+
+    for (int i : machine_code) {
+        executable_file << i << " ";
+    }
+
+    return;
 }
 
 int main(int argc, char* argv[]) {
@@ -90,16 +137,16 @@ int main(int argc, char* argv[]) {
         file_names.push_back(argv[i]);
     }
 
-    // if (file_names.size() == 1) {
-    //     cerr << "Erro: arquivo(s) inválido(s)!\n";
-    //     return 1;
-    // } else {
+    if (file_names.size() == 1) {
+        cerr << "Erro: arquivo(s) inválido(s)!\n";
+        return 1;
+    } else {
         if (all_of(file_names.begin(), file_names.end(), [](string& s) {return s.substr(s.size()-4, 4) == ".obj";})) {
             linker(file_names);
         } else {
             cerr << "Erro: arquivo(s) inválido(s)!\n";
             return 1;
         }
-    // }
+    }
     return 0;
 }
