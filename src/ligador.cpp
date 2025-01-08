@@ -3,45 +3,84 @@
 using namespace std;
 
 void linker(vector<string> objFiles) {
-    map<string, int> global_symbol_table; // Tabela global de símbolos
-    vector<string> resolved_code;        // Código final resolvido
-    int base_address = 0;                // Endereço base para realocação
+    vector<int> offsets = {0};
+    map<string, int> global_definition_table;
+    map<string, vector<int>> usage_table;
+    int curr = 0;
 
-    for (const auto& file : objFiles) {
-        ifstream inputFile(file);
-        if (!inputFile.is_open()) {
-            cerr << "Erro ao abrir o arquivo: " << file << '\n';
-            continue;
+    for (string& fn : objFiles) {
+        ifstream obj_file(fn);
+        string line, machine_code;    
+        vector<string> labels;    
+
+        if (!obj_file.is_open()) {
+            cerr << "Erro ao abrir o arquivo: " << fn << '\n';
+            return;
         }
 
-        string line;
-        while (getline(inputFile, line)) {
-            if (line[0] == 'D') {
-                // Definições
-                string symbol;
-                int value;
-                sscanf(line.c_str(), "D, %s %d", &symbol, &value);
-                global_symbol_table[symbol] = value + base_address;
-            } else if (line[0] == 'U') {
-                // Referências não resolvidas (ainda não tratadas)
-            } else if (line[0] == 'R') {
-                // Tabela de realocação
-                // Lógica para aplicar as realocações ao código
+        // obj_file.seekg(-1, ios::end);
+
+        // char ch;
+        // while (true) {
+        //     obj_file.get(ch);
+
+        //     if ((int) obj_file.tellg() <= 1) {
+        //         obj_file.seekg(0);
+        //         break;
+        //     } else if (ch == '\n') {
+        //         break;
+        //     } else {
+        //         obj_file.seekg(-2, ios::cur);
+        //     }
+        // }
+
+        while (getline(obj_file, line)) {
+            if (line.substr(0, 2) == "D,") {
+                line = line.substr(3);
+                
+                size_t pos = line.find(" ");
+                string label = line.substr(0, pos);
+                
+                line.erase(0, pos+1);
+                
+                string position = line.substr((pos = line.find(" "))+1);
+
+                global_definition_table[label] = stoi(position);
+                labels.push_back(label);
+            } else if (line.substr(0, 2) == "U,") {
+                continue;
+            } else if (line.substr(0, 2) == "R,") {
+                continue;
             } else {
-                // Código do programa
-                resolved_code.push_back(line);
+                machine_code = line;
             }
         }
+        
+        size_t pos;
+        string token;
+        int count = 0;
+        while ((pos = machine_code.find(" ")) != machine_code.npos) {
+            token = machine_code.substr(0, pos);
+            
+            if (token == " ") {
+                break;
+            } 
 
-        // Atualiza endereço base
-        base_address += resolved_code.size();
-        inputFile.close();
+            count++;
+            machine_code.erase(0, pos+1);
+        }
+
+        offsets.push_back(offsets[curr]+count);
+
+        for (string& l : labels) {
+            global_definition_table[l] += offsets[curr];
+        }
+
+        obj_file.close();
+        curr++;
     }
 
-    // Imprime código final resolvido
-    for (const auto& line : resolved_code) {
-        cout << line << '\n';
-    }
+
 }
 
 int main(int argc, char* argv[]) {
@@ -51,16 +90,16 @@ int main(int argc, char* argv[]) {
         file_names.push_back(argv[i]);
     }
 
-    if (file_names.size() == 1) {
-        cerr << "Erro: arquivo(s) inválido(s)!\n";
-        return 1;
-    } else {
+    // if (file_names.size() == 1) {
+    //     cerr << "Erro: arquivo(s) inválido(s)!\n";
+    //     return 1;
+    // } else {
         if (all_of(file_names.begin(), file_names.end(), [](string& s) {return s.substr(s.size()-4, 4) == ".obj";})) {
             linker(file_names);
         } else {
             cerr << "Erro: arquivo(s) inválido(s)!\n";
             return 1;
         }
-    }
+    // }
     return 0;
 }
