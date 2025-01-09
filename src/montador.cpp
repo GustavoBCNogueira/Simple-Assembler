@@ -3,8 +3,7 @@
 // Variável global para indicar se o programa terá que ser ligado (true) ou não (false)
 bool has_link = false;
 
-
-// trim from start (in place)
+// Função para retirar os espaços à esquerda da string
 inline void ltrim(std::string &s) {
     s.erase(s.begin(), find_if(s.begin(), s.end(), [](unsigned char ch) {
         return !isspace(ch);
@@ -12,7 +11,7 @@ inline void ltrim(std::string &s) {
 }
 
 
-// trim from end (in place)
+// Função para retirar os espaços à direita da string
 inline void rtrim(std::string &s) {
     s.erase(find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
         return !isspace(ch);
@@ -20,7 +19,7 @@ inline void rtrim(std::string &s) {
 }
 
 
-// trim from both ends (in place)
+// Função para retirar os espaços à esquerda e à direita da string
 inline void trim(std::string &s) {
     rtrim(s);
     ltrim(s);
