@@ -155,44 +155,39 @@ void pre_processing(std::string& file_name, std::ifstream& file) {
             line.erase(0, pos+delimiter.length());
         }
 
-        if (macro) {
-            // Caso em que a linha atual está dentro do escopo de uma macro
-            std::string temp = "";
-
-            for (auto t : tokens) {
-                temp += t+" ";
-            }
-
-            macro_definition_table.push_back(temp);
-            
-            if (temp.find("ENDMACRO") != temp.npos) {
-                macro = false;
-            }
-
-            continue;
-        }
-
         if (tokens.size() > 1 && tokens[1].find("MACRO") != tokens[1].npos) {
             // Declaração de macro
             std::string macro_name = tokens[0].substr(0, tokens[0].find(":"));
             trim(macro_name);
 
-            if (macro_name_table.count(macro_name) == 1) {
-                std::cerr << "Erro! Macro redefinida!\n";
-            } else {
-                macro_name_table.insert({macro_name, macro_definition_table.size()});
-                macro = true;
-            }
+            macro_name_table.insert({macro_name, macro_definition_table.size()});
+            macro = true;
            
             continue;
-        } 
+        }
+
+        if (tokens.size() > 2 && tokens[1] == "CONST") {
+            if (tokens[2].find("0X") != tokens[2].npos) {
+                int num = 0;
+                
+                for (int i = tokens[2].size()-1; tokens[2][i] != 'X'; i--) {
+                    num += (int)pow(16, tokens[2].size()-1-i) * (tokens[2][i]-48);
+                }
+
+                tokens[2] = std::to_string(num);
+            }
+        }
 
         if (macro_name_table.count(tokens[0]) == 1) {
             // Chamada de macro na seção de texto do código
             int idx = macro_name_table[tokens[0]];
            
             while (macro_definition_table[idx].find("ENDMACRO") == macro_definition_table[idx].npos) {
-                text_code.push_back(macro_definition_table[idx]);
+                if (macro) {
+                    macro_definition_table.push_back(macro_definition_table[idx]);
+                } else if (text) {
+                    text_code.push_back(macro_definition_table[idx]);
+                }
                 idx++;
             }
         } else {
@@ -202,8 +197,14 @@ void pre_processing(std::string& file_name, std::ifstream& file) {
             for (auto t : tokens) {
                 temp += t+" ";
             }
-            
-            if (text) {
+
+            if (macro) {
+                if (temp.find("ENDMACRO") != temp.npos) {
+                    macro = false;
+                } 
+
+                macro_definition_table.push_back(temp);
+            } else if (text) {
                 text_code.push_back(temp);
             } else {
                 data_code.push_back(temp);
@@ -303,24 +304,20 @@ std::tuple<std::map<std::string, std::pair<int, bool>>, std::map<int, int*>, std
 
             if (isdigit(label[0])) {
                 std::cerr << "Erro na linha " << line_counter << ": erro léxico na criação do rótulo!\n";
-                break;
+                return {{{"-1", {-1, 0}}}, {}, {}};
             } else {
-                bool error = false;
                 for (auto c : label) {
                     if (!(isalnum(c) || c == '_')) {
                         std::cerr << "Erro na linha " << line_counter << ": erro léxico na criação do rótulo!\n";
-                        error = true;
+                        return {{{"-1", {-1, 0}}}, {}, {}};
                     }
                 }
 
-                if (error) {
-                    break;
-                } 
             }
 
             if (symbol_table.count(label) == 1) {
-                std::cerr << "Erro na linha " << line_counter << ": rótulo redefinido!\n";
-                break;
+                std::cerr << "Erro na linha " << line_counter << ": erro semântico, rótulo redefinido!\n";
+                return {{{"-1", {-1, 0}}}, {}, {}};
             } else {
                 symbol_table.insert({label, {position_counter, 0}});
             }
@@ -336,8 +333,8 @@ std::tuple<std::map<std::string, std::pair<int, bool>>, std::map<int, int*>, std
 
         // Se ainda há um rótulo na linha, detecta o erro
         if (operation.find(":") != operation.npos) {
-            std::cerr << "Erro na linha " << line_counter << ": rótulo dobrado na mesma linha!\n";
-            break;
+            std::cerr << "Erro na linha " << line_counter << ": erro sintático, rótulo dobrado na mesma linha!\n";
+            return {{{"-1", {-1, 0}}}, {}, {}};
         }
 
         // Se a operação for BEGIN, indica que o programa será ligado
@@ -359,29 +356,27 @@ std::tuple<std::map<std::string, std::pair<int, bool>>, std::map<int, int*>, std
         if (instruction_table.count(operation) == 1) {
             // Caso em que uma operação é identificada na linha
             if (tokens.size() != instruction_table[operation].second) { 
-                std::cerr << "Erro na linha " << line_counter << ": número de operandos errados para a instrução!\n";
-                break;
+                std::cerr << "Erro na linha " << line_counter << ": erro sintático, número de operandos errados para a instrução!\n";
+                return {{{"-1", {-1, 0}}}, {}, {}};
             }
             position_counter += instruction_table[operation].second;
         } else {
             // Caso em que uma diretiva é identificada na linha
             if (directives_table.count(operation) == 1) {
                 if (tokens.size() > 2) {
-                    std::cerr << "Erro na linha " << line_counter << ": número de operandos errados para a diretiva!\n";
-                    break;
+                    std::cerr << "Erro na linha " << line_counter << ": erro sintático, número de operandos errados para a diretiva!\n";
+                    return {{{"-1", {-1, 0}}}, {}, {}};
                 }
 
                 if (operation == "CONST") {
-                    if (tokens[1].find("0x") != tokens[1].npos) {
-                        int num = 0;
-                        for (int i = tokens[1].size()-1; tokens[1][i] != 'x'; i--) {
-                            num += (int)pow(16, tokens[1].size()-1-i) * stoi(std::to_string(tokens[1][i]));
-                        }
-                        symbol_values.insert({symbol_table[label].first, &num});
-                    } else{ 
-                        symbol_values.insert({symbol_table[label].first, (int*) malloc(4)});
-                        *symbol_values[symbol_table[label].first] = stoi(tokens[1]);                   
+                    if (tokens.size() == 1) {
+                        std::cerr << "Erro na linha " << line_counter << ": erro sintático, número de operandos errados para a diretiva!\n";
+                        return {{{"-1", {-1, 0}}}, {}, {}};
                     }
+                    
+                    symbol_values.insert({symbol_table[label].first, (int*) malloc(4)});
+                    *symbol_values[symbol_table[label].first] = stoi(tokens[1]);                   
+                    
                     position_counter += directives_table[operation];
                 } else {
                     if (tokens.size() == 2) {
@@ -394,8 +389,8 @@ std::tuple<std::map<std::string, std::pair<int, bool>>, std::map<int, int*>, std
                 }
             } else {
                 // Erro caso a operação é inválida
-                std::cerr << "Erro na linha " << line_counter << ": operação não identificada!\n";
-                break;
+                std::cerr << "Erro na linha " << line_counter << ": erro sintático, operação não identificada!\n";
+                return {{{"-1", {-1, 0}}}, {}, {}};
             }
         }
 
@@ -513,7 +508,8 @@ std::map<std::string, std::vector<int>> second_pass(std::string& file_name, std:
                         bit_map += "1 ";
                     }
                 } else {
-                    std::cerr << "Erro na linha " << line_counter << ": rótulo ausente!\n";
+                    std::cerr << "Erro na linha " << line_counter << ": errp sintático, rótulo ausente!\n";
+                    return {{"-1", {}}};
                 }
             }
             position_counter += instruction_table[operation].second;
@@ -535,13 +531,7 @@ std::map<std::string, std::vector<int>> second_pass(std::string& file_name, std:
                     machine_code += std::to_string(*symbol_values[position_counter]) + " ";
                 }
                 position_counter += directives_table[tokens[0]];
-            } else {
-                if (operation == "BEGIN" || operation == "END") {
-                    continue;
-                } else {
-                    std::cerr << "Erro na linha " << line_counter << "! Operação não indentificada!\n";   
-                }
-            }
+            } 
         }
 
         line_counter++;
@@ -596,10 +586,20 @@ int main(int argc, char* argv[]) {
         std::map<std::string, std::vector<int>> usage_table;
 
         std::tie(symbol_table, symbol_values, definitions_table) = first_pass(input_file);
+
+        if (symbol_table.count("-1") == 1) {
+            input_file.close();
+            return 1;
+        }
+
         std::ifstream input_file(file_name);
         usage_table = second_pass(file_name, input_file, symbol_table, symbol_values, definitions_table);
-        
+
         input_file.close();
+
+        if (usage_table.count("-1") == 1) {
+            return 1;
+        }
     } else {
         std::cerr << "Erro: arquivo(s) inválido(s)!\n";
         return 1;
