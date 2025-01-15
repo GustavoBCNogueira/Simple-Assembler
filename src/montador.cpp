@@ -319,6 +319,9 @@ std::tuple<std::map<std::string, std::pair<int, bool>>, std::map<int, int*>, std
                 std::cerr << "Erro na linha " << line_counter << ": erro semântico, rótulo redefinido!\n";
                 return {{{"-1", {-1, 0}}}, {}, {}};
             } else {
+                if (label == "BEGIN") {
+                    has_link = true;
+                }
                 symbol_table.insert({label, {position_counter, 0}});
             }
             
@@ -331,17 +334,18 @@ std::tuple<std::map<std::string, std::pair<int, bool>>, std::map<int, int*>, std
 
         std::string operation = tokens[0];
 
+        // Se a label é BEGIN, salva o nome do módulo na tabela de símbolos
+        if (label == "BEGIN") {
+            symbol_table.insert({operation, {position_counter, 0}});
+            continue;
+        }
+
         // Se ainda há um rótulo na linha, detecta o erro
         if (operation.find(":") != operation.npos) {
             std::cerr << "Erro na linha " << line_counter << ": erro sintático, rótulo dobrado na mesma linha!\n";
             return {{{"-1", {-1, 0}}}, {}, {}};
         }
 
-        // Se a operação for BEGIN, indica que o programa será ligado
-        if (operation == "BEGIN") {
-            has_link = true;
-            continue;
-        }
 
         if (operation == "END") {
             continue;
