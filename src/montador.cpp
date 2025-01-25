@@ -52,10 +52,10 @@ void pre_processing(std::string& file_name, std::ifstream& file) {
     //        armazenadas em pre_processed_code.
     std::vector<std::string> pre_processed_code, text_code, data_code;
 
-    // macro_name_table: armazena os nomes das macros e o seu respectivo índice na MDT
-    // macro_definition_table: armazena os escopos das macros
-    std::map<std::string, int> macro_name_table;
-    std::vector<std::string> macro_definition_table;
+    // MDT: armazena os nomes das macros e o seu respectivo índice na MDT
+    // MNT: armazena os escopos das macros
+    std::map<std::string, int> MDT;
+    std::vector<std::string> MNT;
 
     // Loop para analisar o arquivo .asm linha a linha
     while (getline(file, line)) {
@@ -160,7 +160,7 @@ void pre_processing(std::string& file_name, std::ifstream& file) {
             std::string macro_name = tokens[0].substr(0, tokens[0].find(":"));
             trim(macro_name);
 
-            macro_name_table.insert({macro_name, macro_definition_table.size()});
+            MDT.insert({macro_name, MNT.size()});
             macro = true;
            
             continue;
@@ -178,15 +178,15 @@ void pre_processing(std::string& file_name, std::ifstream& file) {
             }
         }
 
-        if (macro_name_table.count(tokens[0]) == 1) {
+        if (MDT.count(tokens[0]) == 1) {
             // Chamada de macro na seção de texto do código
-            int idx = macro_name_table[tokens[0]];
+            int idx = MDT[tokens[0]];
            
-            while (macro_definition_table[idx].find("ENDMACRO") == macro_definition_table[idx].npos) {
+            while (MNT[idx].find("ENDMACRO") == MNT[idx].npos) {
                 if (macro) {
-                    macro_definition_table.push_back(macro_definition_table[idx]);
+                    MNT.push_back(MNT[idx]);
                 } else if (text) {
-                    text_code.push_back(macro_definition_table[idx]);
+                    text_code.push_back(MNT[idx]);
                 }
                 idx++;
             }
@@ -203,7 +203,7 @@ void pre_processing(std::string& file_name, std::ifstream& file) {
                     macro = false;
                 } 
 
-                macro_definition_table.push_back(temp);
+                MNT.push_back(temp);
             } else if (text) {
                 text_code.push_back(temp);
             } else {
